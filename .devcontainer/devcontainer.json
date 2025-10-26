@@ -28,10 +28,10 @@
     "source=${localWorkspaceFolder}/MedlarTV,target=/workspaces/medlartv,type=bind"
   ],
 
-  "forwardPorts": [8000, 7860],
+  "forwardPorts": [8000, 8765],
   "portsAttributes": {
     "8000": { "label": "FastAPI Server" },
-    "7860": { "label": "Avatar Bridge" }
+    "8765": { "label": "Avatar Bridge" }
   },
 
   "env": {
