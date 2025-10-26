@@ -1268,7 +1268,7 @@ def analyze_sentiment(message: str) -> float:
         if re.search(rf"\b{i}\b", text):
             score *= 1.5
     # clamp between -1 and 1
-    return max(-1.0, min(1.0, score / 5)
+    return max(-1.0, min(1.0, score / 5))
 
 
 ================================================================================
@@ -1292,11 +1292,10 @@ FILE: MedlarTV/data/memory.yaml
 ================================================================================
 
 personality_memory:
-  last_update: 1761447685
+  last_update: 1761460099
   mood_weights:
     chill: 1
     hype: 1
-    sad: 1
     snarky: 1
     supportive: 1
 
