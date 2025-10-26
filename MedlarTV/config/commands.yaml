@@ -1,14 +1,24 @@
 commands:
   ping:
     response: "Pong 🏓 — I hear you, {user}!"
+  
   status:
     response: "System nominal ⚙️ | Connected as {nick}"
+  
   hello:
     response: "Hey {user}! 👋 Ready for action."
+  
   hype:
     response: "🔥 LET'S GOOOOO, {user}!"
+  
   medlar:
     response: "devilmeGODMODE Medlar mode engaged, {user} 😈"
+  
   moodnumbers:
     response: "{user} 📊 Mood breakdown incoming!"
-  status:
+  
+  mood:
+    response: "Current mood: {mood} | All systems operational"
+  
+  help:
+    response: "Available commands: !ping, !status, !hello, !hype, !medlar, !mood, !moodnumbers, !help"

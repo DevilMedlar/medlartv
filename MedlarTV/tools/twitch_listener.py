@@ -108,7 +108,121 @@ def switch_mood(new_mood, auto=False):
     except Exception as e:
         log.warning(f"[Bridge] send_mood_update failed: {e}")
 
-    requests.post(f"{CORE_URL}/mood", json={"mood": new_mood}, timeout=3)
+    try:
+        requests.post(f"{CORE_URL}/mood", json={"mood": new_mood}, timeout=3)
+    except Exception as e:
+        log.warning(f"[Core] Mood update failed: {e}")
+
+
+def send_reply(sock, message, reply_to_msg_id=None):
+    """Send a message to Twitch chat with optional reply threading."""
+    if reply_to_msg_id:
+        sock.send(f"@reply-parent-msg-id={reply_to_msg_id} PRIVMSG {CHANNEL} :{message}\r\n".encode("utf-8"))
+    else:
+        sock.send(f"PRIVMSG {CHANNEL} :{message}\r\n".encode("utf-8"))
+    log.info(f"[MedlarTV→Twitch] {message}")
+
+
+def handle_command(sock, username, message, msg_id=None):
+    """Handle ! commands from chat."""
+    parts = message.split()
+    cmd = parts[0][1:].lower()  # Remove the !
+    
+    if cmd not in COMMANDS:
+        return False
+    
+    cmd_config = COMMANDS[cmd]
+    response = cmd_config.get("response", "")
+    
+    # Format the response
+    response = response.replace("{user}", username)
+    response = response.replace("{nick}", NICK)
+    
+    # Special handling for certain commands
+    if cmd == "moodnumbers":
+        from MedlarTV.core.memory import load_memory
+        data = load_memory()
+        moods = data["personality_memory"]["mood_weights"]
+        response = f"@{username} 📊 Mood Stats: " + " | ".join([f"{m}: {v}" for m, v in moods.items()])
+    
+    elif cmd == "mood":
+        response = f"@{username} Current mood: {current_mood} {MOODS.get(current_mood, {}).get('emoji', [''])[0]}"
+    
+    send_reply(sock, response, msg_id)
+    return True
+
+
+def detect_mood_from_message(message):
+    """Detect if message should trigger a mood change."""
+    msg_lower = message.lower()
+    
+    for mood_name, mood_config in MOODS.items():
+        triggers = mood_config.get("triggers", [])
+        for trigger in triggers:
+            if trigger in msg_lower:
+                return mood_name
+    
+    return None
+
+
+def should_respond_to_message(username, message):
+    """Determine if MedlarTV should respond to this message."""
+    msg_lower = message.lower()
+    
+    # Always respond if mentioned directly
+    personality_triggers = PERSONALITY.get("trigger_keywords", [])
+    for trigger in personality_triggers:
+        if trigger.lower() in msg_lower:
+            return True
+    
+    # Respond to @mentions
+    if f"@{NICK.lower()}" in msg_lower:
+        return True
+    
+    # Respond to questions directed at bot
+    if "?" in message and any(word in msg_lower for word in ["medlar", "bot", "ai"]):
+        return True
+    
+    return False
+
+
+def get_llm_response(username, message):
+    """Get AI response from the Core API."""
+    try:
+        response = requests.post(
+            f"{CORE_URL}/chat",
+            json={"prompt": message, "sender": username},
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            return data.get("reply", "")
+        else:
+            log.error(f"[Core] API returned {response.status_code}")
+            return None
+            
+    except requests.exceptions.Timeout:
+        log.error("[Core] Request timed out")
+        return None
+    except Exception as e:
+        log.error(f"[Core] Error getting LLM response: {e}")
+        return None
+
+
+def format_reply_with_mood(reply):
+    """Add mood-based styling to reply."""
+    style = STYLE_PROFILES.get(current_mood, {})
+    prefix = style.get("prefix", "")
+    suffix = style.get("suffix", "")
+    
+    # Don't double-add styling if it's already there
+    if prefix and not reply.startswith(prefix):
+        reply = f"{prefix} {reply}"
+    if suffix and not reply.endswith(suffix):
+        reply = f"{reply} {suffix}"
+    
+    return reply
 
 
 # --- NETWORK FUNCTIONS ---
@@ -157,12 +271,13 @@ def listen(sock):
             break
 
         if resp.startswith("PING"):
-            sock.send(b"PONG\r\n")
+            sock.send(b"PONG :tmi.twitch.tv\r\n")
             continue
 
         if not resp.strip():
             continue
 
+        # Parse IRC tags
         tags = {}
         raw = resp
         if raw.startswith("@"):
@@ -180,16 +295,22 @@ def listen(sock):
         reply_parent_msg_id = tags.get("reply-parent-msg-id")
         reply_parent_user = tags.get("reply-parent-user-login")
 
+        # Auto mood detection from keywords
         msg_lower = resp.lower()
-        if "hype" in msg_lower:
-            switch_mood("hype", auto=True)
-        elif "chill" in msg_lower:
-            switch_mood("chill", auto=True)
-        elif "snarky" in msg_lower:
-            switch_mood("snarky", auto=True)
-        elif "supportive" in msg_lower:
-            switch_mood("supportive", auto=True)
+        detected_mood = None
+        if "hype" in msg_lower or "let's go" in msg_lower or "pog" in msg_lower:
+            detected_mood = "hype"
+        elif "chill" in msg_lower or "relax" in msg_lower or "vibe" in msg_lower:
+            detected_mood = "chill"
+        elif "lol" in msg_lower or "lmao" in msg_lower or "bruh" in msg_lower:
+            detected_mood = "snarky"
+        elif "sad" in msg_lower or "help" in msg_lower or "aww" in msg_lower:
+            detected_mood = "supportive"
+        
+        if detected_mood:
+            switch_mood(detected_mood, auto=True)
 
+        # Process PRIVMSG (actual chat messages)
         if "PRIVMSG" in resp and "!" in resp:
             try:
                 username = resp.split("!", 1)[0][1:].lower()
@@ -199,17 +320,48 @@ def listen(sock):
                 message = resp.split("PRIVMSG", 1)[1].split(":", 1)[1].strip()
                 log.info(f"[Twitch→Core] {username}: {message}")
 
+                # Store message in recent history
                 if msg_id:
                     recent_msgs[msg_id] = {"user": username, "message": message}
                     if len(recent_msgs) > 80:
                         oldest = next(iter(recent_msgs))
                         recent_msgs.pop(oldest, None)
 
-                # (rest of your logic remains 100 % identical)
-                # all Medlar→MedlarTV replacements applied consistently
+                # Handle commands first (! commands)
+                if message.startswith("!"):
+                    if handle_command(sock, username, message, msg_id):
+                        continue  # Command handled, don't process further
+
+                # Check if we should respond to this message
+                if not should_respond_to_message(username, message):
+                    # Even if not responding, still detect mood
+                    mood = detect_mood_from_message(message)
+                    if mood:
+                        switch_mood(mood, auto=True)
+                    continue
+
+                # Rate limiting
+                if not can_reply():
+                    log.info("[Cooldown] Skipping reply (rate limited)")
+                    continue
+
+                # Get LLM response
+                log.info(f"[LLM] Generating response for {username}...")
+                llm_reply = get_llm_response(username, message)
+                
+                if llm_reply:
+                    # Format with mood styling
+                    formatted_reply = format_reply_with_mood(llm_reply)
+                    
+                    # Send the reply (with threading if this was a reply to us)
+                    send_reply(sock, formatted_reply, msg_id if reply_parent_msg_id else None)
+                else:
+                    log.warning("[LLM] No response generated")
 
             except Exception as e:
                 log.error(f"[Handler] Failed to process message: {e}")
+                import traceback
+                traceback.print_exc()
 
 
 def cleanup_and_exit(sock):
@@ -239,4 +391,6 @@ if __name__ == "__main__":
         cleanup_and_exit(s)
     except Exception as e:
         log.error(f"💥 Fatal error: {e}")
+        import traceback
+        traceback.print_exc()
         raise

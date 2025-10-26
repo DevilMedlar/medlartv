@@ -34,7 +34,7 @@ def start_bridge_loop():
         except (ConnectionRefusedError, WebSocketException) as e:
             print(f"[Bridge] ❌ Connection failed: {e}")
         except Exception as e:
-            print(f"[Bridge] 🧠 Unexpected error: {e}")
+            print(f"[Bridge] 🧨 Unexpected error: {e}")
             traceback.print_exc()
 
         print(f"[Bridge] ⏳ Retrying connection in {RECONNECT_DELAY}s...")

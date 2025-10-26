@@ -1,7 +1,7 @@
 import asyncio
 import json
 import websockets
-import time  # FIX: Added missing import
+import time
 from colorama import init, Fore, Style
 
 init(autoreset=True)

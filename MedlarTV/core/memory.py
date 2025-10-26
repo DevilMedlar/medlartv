@@ -1,3 +1,4 @@
+
 import yaml
 import os
 import time
@@ -53,7 +54,6 @@ def reset_memory_on_shutdown():
             "mood_weights": {
                 "chill": 1,
                 "hype": 1,
-                "sad": 1,
                 "snarky": 1,
                 "supportive": 1
             }

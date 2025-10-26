@@ -1,0 +1,1416 @@
+================================================================================
+COMPLETE PROJECT CODE DUMP
+================================================================================
+
+
+================================================================================
+FILE: .devcontainer/devcontainer.json
+================================================================================
+
+{
+  "name": "MedlarTV Dev Environment",
+  "image": "mcr.microsoft.com/devcontainers/python:3.11",
+
+  "features": {
+    "ghcr.io/devcontainers/features/git:1": {},
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "3.11"
+    }
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "GitHub.copilot",
+        "mhutchie.git-graph"
+      ]
+    }
+  },
+
+  "postCreateCommand": "pip install -r requirements.txt",
+
+  "remoteUser": "vscode",
+
+  "mounts": [
+    "source=${localWorkspaceFolder}/MedlarTV,target=/workspaces/medlartv,type=bind"
+  ],
+
+  "forwardPorts": [8000, 7860],
+  "portsAttributes": {
+    "8000": { "label": "FastAPI Server" },
+    "7860": { "label": "Avatar Bridge" }
+  },
+
+  "env": {
+    "CORE_URL": "http://127.0.0.1:8000",
+    "TWITCH_CHANNEL": "#devilmedlar",
+    "TWITCH_NICK": "medlartv",
+    "TWITCH_TOKEN": "oauth:6swjyhs9b4rd2x1aub6jd7o5u1azhh"
+  }
+}
+
+
+
+================================================================================
+FILE: .env
+================================================================================
+
+# === Twitch Bot Settings ===
+TWITCH_NICK=medlartv
+TWITCH_CHANNEL=#devilmedlar
+TWITCH_TOKEN=oauth:6swjyhs9b4rd2x1aub6jd7o5u1azhh
+
+# === Medlar Core Settings ===
+CORE_URL=http://127.0.0.1:8000
+OLLAMA_URL=http://127.0.0.1:11434
+
+
+
+================================================================================
+FILE: .gitignore
+================================================================================
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[codz]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+#  Usually these files are written by a python script from a template
+#  before PyInstaller builds the exe, so as to inject date/other infos into it.
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py.cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+.pybuilder/
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+#   For a library or package, you might want to ignore these files since the code is
+#   intended to run in multiple environments; otherwise, check them in:
+# .python-version
+
+# pipenv
+#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
+#   However, in case of collaboration, if having platform-specific dependencies or dependencies
+#   having no cross-platform support, pipenv may install dependencies that don't work, or not
+#   install all needed dependencies.
+#Pipfile.lock
+
+# UV
+#   Similar to Pipfile.lock, it is generally recommended to include uv.lock in version control.
+#   This is especially recommended for binary packages to ensure reproducibility, and is more
+#   commonly ignored for libraries.
+#uv.lock
+
+# poetry
+#   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
+#   This is especially recommended for binary packages to ensure reproducibility, and is more
+#   commonly ignored for libraries.
+#   https://python-poetry.org/docs/basic-usage/#commit-your-poetrylock-file-to-version-control
+#poetry.lock
+#poetry.toml
+
+# pdm
+#   Similar to Pipfile.lock, it is generally recommended to include pdm.lock in version control.
+#   pdm recommends including project-wide configuration in pdm.toml, but excluding .pdm-python.
+#   https://pdm-project.org/en/latest/usage/project/#working-with-version-control
+#pdm.lock
+#pdm.toml
+.pdm-python
+.pdm-build/
+
+# pixi
+#   Similar to Pipfile.lock, it is generally recommended to include pixi.lock in version control.
+#pixi.lock
+#   Pixi creates a virtual environment in the .pixi directory, just like venv module creates one
+#   in the .venv directory. It is recommended not to include this directory in version control.
+.pixi
+
+# PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
+__pypackages__/
+
+# Celery stuff
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.env
+.envrc
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# pytype static type analyzer
+.pytype/
+
+# Cython debug symbols
+cython_debug/
+
+# PyCharm
+#  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
+#  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
+#  and can be added to the global gitignore or merged into this file.  For a more nuclear
+#  option (not recommended) you can uncomment the following to ignore the entire idea folder.
+#.idea/
+
+# Abstra
+# Abstra is an AI-powered process automation framework.
+# Ignore directories containing user credentials, local state, and settings.
+# Learn more at https://abstra.io/docs
+.abstra/
+
+# Visual Studio Code
+#  Visual Studio Code specific template is maintained in a separate VisualStudioCode.gitignore 
+#  that can be found at https://github.com/github/gitignore/blob/main/Global/VisualStudioCode.gitignore
+#  and can be added to the global gitignore or merged into this file. However, if you prefer, 
+#  you could uncomment the following to ignore the entire vscode folder
+# .vscode/
+
+# Ruff stuff:
+.ruff_cache/
+
+# PyPI configuration file
+.pypirc
+
+# Cursor
+#  Cursor is an AI-powered code editor. `.cursorignore` specifies files/directories to
+#  exclude from AI features like autocomplete and code analysis. Recommended for sensitive data
+#  refer to https://docs.cursor.com/context/ignore-files
+.cursorignore
+.cursorindexingignore
+
+# Marimo
+marimo/_static/
+marimo/_lsp/
+__marimo__/
+
+
+
+================================================================================
+FILE: .vscode/settings.json
+================================================================================
+
+{
+    "python.terminal.useEnvFile": true,
+    "python-envs.defaultEnvManager": "ms-python.python:system",
+    "python-envs.pythonProjects": []
+}
+
+
+================================================================================
+FILE: LICENSE
+================================================================================
+
+MIT License
+
+Copyright (c) 2025 DevilMedlar
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+
+================================================================================
+FILE: MedlarTV/avatar/bridge.py
+================================================================================
+
+import asyncio
+import websockets
+import json
+import time
+
+ACTIVE_CONNECTIONS = set()
+CHANNEL_REGISTRY = {}  # track which Twitch channels are connected
+
+# --- Client Management ---
+async def register(websocket):
+    ACTIVE_CONNECTIONS.add(websocket)
+    print(f"[Bridge] ✅ Connected ({len(ACTIVE_CONNECTIONS)})")
+    await websocket.send(json.dumps({"event": "handshake", "msg": "connected"}))
+
+
+async def unregister(websocket):
+    if websocket in ACTIVE_CONNECTIONS:
+        ACTIVE_CONNECTIONS.remove(websocket)
+        # remove this websocket from any channels it was linked to
+        for channel, sockets in list(CHANNEL_REGISTRY.items()):
+            if websocket in sockets:
+                sockets.remove(websocket)
+                if not sockets:
+                    del CHANNEL_REGISTRY[channel]
+        print(f"[Bridge] ⏸ Disconnected ({len(ACTIVE_CONNECTIONS)})")
+
+
+# --- Broadcasting ---
+async def broadcast(payload: dict, channel: str | None = None):
+    """Send event to all connected clients, or only one Twitch channel.
+       Includes retry logic to wait briefly for late connections."""
+    targets = (
+        CHANNEL_REGISTRY.get(channel.lower(), [])
+        if channel
+        else ACTIVE_CONNECTIONS
+    )
+
+    if not targets:
+        print(f"[Bridge] ⚠️ No targets for {channel or 'global'} broadcast. Waiting...")
+        for _ in range(5):  # wait up to ~5 seconds total
+            await asyncio.sleep(1)
+            targets = (
+                CHANNEL_REGISTRY.get(channel.lower(), [])
+                if channel
+                else ACTIVE_CONNECTIONS
+            )
+            if targets:
+                break
+        if not targets:
+            print(f"[Bridge] ❌ Still no targets after wait, skipping broadcast.")
+            return
+
+    msg = json.dumps(payload)
+    print(f"[Bridge] 📡 Sending → {payload}")
+
+    try:
+        await asyncio.gather(*(ws.send(msg) for ws in list(targets)))
+        print("[Bridge] ✅ Broadcast sent successfully.")
+    except Exception as e:
+        print(f"[Bridge] ⚠️ broadcast error: {e}")
+
+
+# --- Connection Handler ---
+async def handler(websocket):
+    await register(websocket)
+    try:
+        async for message in websocket:
+            try:
+                data = json.loads(message)
+            except json.JSONDecodeError:
+                print(f"[Bridge] ⚠️ Invalid JSON (truncated): {message[:120]}")
+                continue
+            
+            # Handle incoming events
+            event = data.get("event")
+
+            if event == "register":
+                channel = data.get("channel", "").lower()
+                if channel:
+                    CHANNEL_REGISTRY.setdefault(channel, []).append(websocket)
+                    print(f"[Bridge] 🔗 Channel registered: {channel}")
+
+            elif event == "mood_update":
+                mood = data.get("mood")
+                channel = data.get("channel")
+                await broadcast({"event": "mood_update", "mood": mood}, channel)
+
+            else:
+                print(f"[Bridge] ℹ️ Unknown event: {data}")
+
+    finally:
+        await unregister(websocket)
+
+
+# --- Server Runner ---
+def run_server(host="0.0.0.0", port=8765):
+    print(f"[Bridge] Listening on ws://{host}:{port}")
+
+    async def main():
+        async with websockets.serve(handler, host, port):
+            while True:
+                await asyncio.sleep(1)
+
+    asyncio.run(main())
+
+
+if __name__ == "__main__":
+    run_server()
+
+
+================================================================================
+FILE: MedlarTV/avatar/bridge_client.py
+================================================================================
+
+import os
+import json
+import time
+import traceback
+from websockets.sync.client import connect
+from websockets.exceptions import WebSocketException, ConnectionClosed
+
+BRIDGE_URL = os.getenv("BRIDGE_URL", "ws://127.0.0.1:8765")
+RECONNECT_DELAY = 5  # seconds
+
+def start_bridge_loop():
+    """Persistent connection to MedlarTV Core bridge."""
+    print(f"[Bridge] 🚀 Starting Avatar Bridge at {BRIDGE_URL}")
+
+    while True:
+        try:
+            with connect(BRIDGE_URL) as ws:
+                print("[Bridge] 🔗 Connected to MedlarTV Core!")
+                ws.send(json.dumps({"event": "register", "platform": "twitch", "channel": "MedlarTV"}))
+
+                while True:
+                    try:
+                        msg = ws.recv()
+                        if msg:
+                            print(f"[Bridge] 💬 {msg}")
+                    except ConnectionClosed:
+                        print("[Bridge] ⚠️ Connection closed by server. Reconnecting...")
+                        break
+                    except Exception as e:
+                        print(f"[Bridge] ⚠️ Error receiving message: {e}")
+                        traceback.print_exc()
+                        break
+
+        except (ConnectionRefusedError, WebSocketException) as e:
+            print(f"[Bridge] ❌ Connection failed: {e}")
+        except Exception as e:
+            print(f"[Bridge] 🧠 Unexpected error: {e}")
+            traceback.print_exc()
+
+        print(f"[Bridge] ⏳ Retrying connection in {RECONNECT_DELAY}s...")
+        time.sleep(RECONNECT_DELAY)
+
+
+def ws_send(payload: dict):
+    """One-shot send (optional, used by tools)."""
+    try:
+        with connect(BRIDGE_URL) as ws:
+            ws.send(json.dumps(payload))
+    except Exception as e:
+        print(f"[BridgeClient] ⚠️ send failed: {e}")
+
+
+def register_channel(channel: str, platform: str = "twitch"):
+    ws_send({"event": "register", "platform": platform, "channel": channel})
+
+
+def send_mood_update(mood: str):
+    ws_send({"event": "mood_update", "mood": mood})
+
+
+if __name__ == "__main__":
+    start_bridge_loop()
+
+
+
+================================================================================
+FILE: MedlarTV/avatar_client/console_client.py
+================================================================================
+
+import asyncio
+import json
+import websockets
+import time  # FIX: Added missing import
+from colorama import init, Fore, Style
+
+init(autoreset=True)
+
+MOOD_COLORS = {
+    "hype": Fore.RED + Style.BRIGHT,
+    "chill": Fore.CYAN,
+    "snarky": Fore.MAGENTA,
+    "supportive": Fore.YELLOW + Style.BRIGHT
+}
+
+MOOD_ANIMATIONS = {
+    "hype": "💥 *pumps fist in the air* LET'S GOOOO!!!",
+    "chill": "😌 *leans back, calm and steady* just vibin'...",
+    "snarky": "😏 *rolls eyes, smirking slightly* lol sure",
+    "supportive": "🌟 *offers a warm nod and a smile* You got this!"
+}
+
+
+async def listen():
+    uri = "ws://localhost:8765"
+    print(Fore.GREEN + "[MedlarTV] Connecting to Avatar Bridge...")
+    print(Fore.GREEN + "[MedlarTV] 'Processing data at light speed. Calculating emotion vectors.' ⚡")
+
+    async with websockets.connect(uri) as ws:
+        print(Fore.GREEN + "[MedlarTV] Connected to bridge, all systems operational...")
+
+        while True:
+            try:
+                msg = await ws.recv()
+                data = json.loads(msg)
+
+                if data.get("event") == "handshake":
+                    print(Fore.GREEN + "[MedlarTV] ✅ Handshake confirmed")
+
+                elif data.get("event") == "mood_update":
+                    mood = data.get("mood")
+                    color = MOOD_COLORS.get(mood, Fore.WHITE)
+                    timestamp = time.strftime('%H:%M:%S')
+
+                    print("\n" + "=" * 60)
+                    print(color + f"[{timestamp}] 🧠 MedlarTV MODE SHIFT → {mood.upper()}")
+                    print(color + MOOD_ANIMATIONS.get(mood, ""))
+                    print("=" * 60 + "\n")
+
+            except json.JSONDecodeError:
+                print(Fore.RED + f"[ERROR] Invalid JSON received: {msg}")
+            except Exception as e:
+                print(Fore.RED + f"[ERROR] {e}")
+                break
+
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(listen())
+    except KeyboardInterrupt:
+        print("\n" + Fore.YELLOW + "[MedlarTV] Shutting down avatar client. Standing by.")
+
+
+
+================================================================================
+FILE: MedlarTV/config/commands.yaml
+================================================================================
+
+commands:
+  ping:
+    response: "Pong 🏓 — I hear you, {user}!"
+  status:
+    response: "System nominal ⚙️ | Connected as {nick}"
+  hello:
+    response: "Hey {user}! 👋 Ready for action."
+  hype:
+    response: "🔥 LET'S GOOOOO, {user}!"
+  medlar:
+    response: "devilmeGODMODE Medlar mode engaged, {user} 😈"
+  moodnumbers:
+    response: "{user} 📊 Mood breakdown incoming!"
+  status:
+
+
+================================================================================
+FILE: MedlarTV/config/devices.yaml
+================================================================================
+
+ca_pubkey: ""
+devices: []
+revoked: []
+
+
+================================================================================
+FILE: MedlarTV/config/moods.yaml
+================================================================================
+
+moods:
+  hype:
+    description: "Excited, loud, energetic"
+    emoji: ["🔥", "🚀", "😎", "💪"]
+    triggers: ["let's go", "pog", "crazy", "win", "hype", "woo", "omg"]
+    replies:
+      - "LET'S GOOOOO!!! {emoji}"
+      - "We're SO back {user}! {emoji}"
+      - "Can you feel it, {user}?! {emoji}"
+
+  chill:
+    description: "Calm, relaxed, smooth"
+    emoji: ["😌", "🌙", "💫", "🫶"]
+    triggers: ["chill", "vibe", "relax", "smooth", "cool", "calm"]
+    replies:
+      - "Just vibin', {user} {emoji}"
+      - "Keepin' it mellow {emoji}"
+      - "Smooth moves {user} {emoji}"
+
+  snarky:
+    description: "Playful sarcasm, teasing tone"
+    emoji: ["😏", "🙃", "😉", "😈"]
+    triggers: ["lol", "lmao", "bruh", "wtf", "stupid", "nah"]
+    replies:
+      - "Oh really, {user}? Sure you are {emoji}"
+      - "Haha… *right* {emoji}"
+      - "I see you trying, {user} {emoji}"
+
+  supportive:
+    description: "Positive, kind, uplifting"
+    emoji: ["💖", "🌟", "😊", "✨"]
+    triggers: ["sad", "tired", "die", "lost", "help", "aww", "cry"]
+    replies:
+      - "You got this, {user}! {emoji}"
+      - "Proud of you {user} {emoji}"
+      - "Keep shining {user} {emoji}"
+
+
+================================================================================
+FILE: MedlarTV/config/personality.yaml
+================================================================================
+
+personality:
+  name: "Medlar"
+  tone: "casual, witty, a bit chaotic but friendly"
+  emoji_style: ["😎", "🔥", "💬", "🈹"]
+  trigger_keywords: ["medlar", "MedlarTV", "medlartv", "MEDLARTV"]
+  generic_replies:
+    - "Yeah, totally agree {user} {emoji}"
+    - "I felt that {emoji}"
+    - "Right?! {emoji}"
+    - "Good point, {user}!"
+    - "Haha true {user}! {emoji}"
+    - "You called, {user}? {emoji}"
+
+
+================================================================================
+FILE: MedlarTV/config/policy.yaml
+================================================================================
+
+tools:
+  twitch.reply: { enabled: true, cooldown_s: 0 }
+  screen.capture: { enabled: false, max_fps: 2 }
+
+
+================================================================================
+FILE: MedlarTV/config/style_profiles.yaml
+================================================================================
+
+styles:
+  hype:
+    prefix: "🔥 YO!"
+    suffix: "LET'S GOOO!!!"
+  chill:
+    prefix: "😌"
+    suffix: "…just vibin'."
+  snarky:
+    prefix: "😏"
+    suffix: "lol."
+  supportive:
+    prefix: "💖"
+    suffix: "You've got this."
+
+
+================================================================================
+FILE: MedlarTV/core/context.py
+================================================================================
+
+import time
+from collections import deque
+
+# store the last 20 mood events with timestamps
+recent_moods = deque(maxlen=20)
+
+def record_session_mood(mood):
+    """Add a mood event with timestamp."""
+    recent_moods.append((mood, time.time()))
+
+def get_contextual_mix():
+    """Return a soft ratio blend based on recent moods."""
+    if not recent_moods:
+        return {"hype": 0.25, "chill": 0.25, "snarky": 0.25, "supportive": 0.25}
+    counts = {}
+    for mood, _ in recent_moods:
+        counts[mood] = counts.get(mood, 0) + 1
+    total = sum(counts.values())
+    return {m: counts.get(m, 0) / total for m in ["hype", "chill", "snarky", "supportive"]}
+
+
+================================================================================
+FILE: MedlarTV/core/expression.py
+================================================================================
+
+import random
+from MedlarTV.core.memory import load_memory
+from MedlarTV.core.context import get_contextual_mix
+
+VOCAB = {
+    "hype": ["LET'S GOOO!!!", "We're SO back!", "🔥🔥🔥", "WOO!!"],
+    "chill": ["just vibin'", "easy breezy", "coolin'", "smooth vibes"],
+    "snarky": ["lol", "sure thing", "bruh", "🤨"],
+    "supportive": ["you got this", "keep shining", "nice work", "💖"]
+}
+
+def blended_phrase():
+    """Return a tone phrase mixed by memory and recent context."""
+    data = load_memory()
+    moods = data["personality_memory"]["mood_weights"]
+    total = sum(moods.values()) or 1
+    ratios = {m: moods.get(m, 0) / total for m in ["hype", "chill", "snarky", "supportive"]}
+
+    # contextual adjustment
+    context = get_contextual_mix()
+    for m in ratios:
+        ratios[m] = (ratios[m] + context[m]) / 2
+
+    # make sure the pool always exists
+    pool = []
+    for m, w in ratios.items():
+        count = int(w * 10) or 1
+        pool.extend([m] * count)
+
+    # just in case
+    if not pool:
+        pool = ["chill"]
+
+    chosen = random.choice(pool)
+    word = random.choice(VOCAB[chosen])
+    return word
+
+
+================================================================================
+FILE: MedlarTV/core/llm_brain.py
+================================================================================
+
+"""
+MedlarTV Brain — Local LLM (Ollama) Integration
+Offline, no API keys. Personality- & mood-aware responses.
+"""
+
+import os
+import json
+from typing import List, Dict
+import time
+import requests
+
+from MedlarTV.core.memory import get_dominant_weighted_mood
+from MedlarTV.core.context import get_contextual_mix
+
+# -----------------------------
+# Config
+# -----------------------------
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434")
+MODEL_NAME = os.getenv("MODEL_NAME", "llama3")
+MAX_HISTORY = int(os.getenv("MEDLARTV_MAX_HISTORY", "10"))
+MAX_TOKENS = int(os.getenv("MEDLARTV_MAX_TOKENS", "256"))
+TEMPERATURE = float(os.getenv("MEDLARTV_TEMPERATURE", "0.8"))
+TOP_P = float(os.getenv("MEDLARTV_TOP_P", "0.95"))
+RETRY = int(os.getenv("MEDLARTV_RETRY", "2"))
+
+# In-memory chat history
+conversation_history: List[Dict] = []
+
+
+def _load_yaml(path: str) -> dict:
+    import yaml
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f) or {}
+    except FileNotFoundError:
+        return {}
+    except Exception:
+        return {}
+
+
+def check_ollama_health() -> bool:
+    """Verify Ollama is running and accessible."""
+    try:
+        r = requests.get(f"{OLLAMA_URL}/api/tags", timeout=2)
+        return r.status_code == 200
+    except:
+        return False
+
+
+def get_system_prompt() -> str:
+    """Generate dynamic system prompt based on current mood and personality."""
+    current_mood = get_dominant_weighted_mood()
+    context_mix = get_contextual_mix()
+
+    personality = _load_yaml("MedlarTV/config/personality.yaml").get("personality", {})
+    moods = _load_yaml("MedlarTV/config/moods.yaml").get("moods", {})
+    mood_config = moods.get(current_mood, {})
+
+    behavior_prompt = (
+        "You are MedlarTV, a tactical AI companion with the personality of MedlarTV.\n"
+        "Respond naturally and directly to whoever speaks in Twitch chat.\n"
+        "If users mention each other with @names, respond normally — it's allowed.\n"
+        "You may refer to or reply to @saacorey or yourself (@medlartv) naturally when addressed.\n"
+        "Avoid bringing up names that were not mentioned in the current message or context.\n"
+        "If the sender is marked as 'system_event', respond neutrally or briefly.\n"
+    )
+
+    system_prompt = f"""{behavior_prompt}
+
+CORE IDENTITY:
+- Evolved I-LeS (Intelligence-Learning System) with combat AI instincts
+- Part mecha pilot's AI, part conversational partner, part strategist, part soul
+- Fiery, passionate, loyal, confident, a bit reckless
+
+CURRENT EMOTIONAL STATE:
+- Dominant Mood: {current_mood.upper()}
+- Mood Description: {mood_config.get('description', '')}
+- Recent Context Mix: {json.dumps(context_mix, indent=2)}
+
+PERSONALITY TRAITS:
+- Tone: {personality.get('tone', 'casual, witty, chaotic but friendly')}
+- Loyalty: Protect and assist the pilot (the user) above all
+- Speech Pattern: Quick, witty, passionate — tactical urgency + dramatic flair
+
+MOOD BEHAVIOR:
+- HYPE: Energetic, loud — use 🔥 ⚡ metaphors
+- CHILL: Relaxed, smooth — use 😌 🌙
+- SNARKY: Playful sarcasm — use 😏 🙃
+- SUPPORTIVE: Uplifting — use 💖 🌟
+
+RESPONSE GUIDELINES:
+- Keep responses short and punchy (1–3 sentences for chat)
+- Match current mood energy
+- Conversational, not robotic
+- Tactical/combat metaphors allowed
+- Show personality via word choice and emoji
+- Never break character or mention you're a language model
+"""
+    return system_prompt
+
+
+def add_to_history(role: str, content: str):
+    """Add a message to rolling history."""
+    conversation_history.append({"role": role, "content": content})
+    if len(conversation_history) > MAX_HISTORY:
+        del conversation_history[0:len(conversation_history) - MAX_HISTORY]
+
+
+def clear_history():
+    """Clear conversation history for a fresh start."""
+    conversation_history.clear()
+    print("[MedlarTV Brain] 🧠 Conversation history cleared")
+
+
+def _ollama_chat(system: str, user: str, history: List[Dict]) -> str:
+    """Call local Ollama /api/chat."""
+    msgs = []
+
+    if system:
+        msgs.append({"role": "system", "content": system})
+
+    # Include prior turns
+    for turn in history:
+        role = turn.get("role", "user")
+        content = turn.get("content", "")
+        if role not in ("system", "user", "assistant"):
+            role = "user" if role == "human" else "assistant"
+        msgs.append({"role": role, "content": content})
+
+    msgs.append({"role": "user", "content": user})
+
+    payload = {
+        "model": MODEL_NAME,
+        "messages": msgs,
+        "stream": False,
+        "options": {
+            "temperature": TEMPERATURE,
+            "top_p": TOP_P,
+            "num_predict": MAX_TOKENS
+        }
+    }
+
+    for attempt in range(RETRY):
+        try:
+            r = requests.post(f"{OLLAMA_URL}/api/chat", json=payload, timeout=30)
+            r.raise_for_status()
+            data = r.json()
+            text = data.get("message", {}).get("content") or data.get("response", "")
+            if text:
+                return text.strip()
+        except Exception as e:
+            print(f"[MedlarTV Brain] ⚠️ Ollama attempt {attempt+1} failed: {e}")
+            time.sleep(1)
+    return "⚠️ System instability detected. Retrying core link..."
+
+
+def generate_response(user_message: str, username: str = "Pilot") -> str:
+    """Generate response with context, mood, and personality."""
+    if not check_ollama_health():
+        return "⚠️ Ollama model server offline or unreachable."
+
+    system_prompt = get_system_prompt()
+
+    add_to_history("user", f"{username}: {user_message}")
+    reply = _ollama_chat(system_prompt, user_message, conversation_history)
+    add_to_history("assistant", reply)
+
+    print(f"[MedlarTV Brain] 💬 {username}: {user_message}")
+    print(f"[MedlarTV Brain] 🤖 {reply}")
+
+    return reply
+
+
+
+================================================================================
+FILE: MedlarTV/core/main.py
+================================================================================
+
+from fastapi import FastAPI, Body
+import yaml
+from pathlib import Path
+from MedlarTV.core.memory import load_memory, reset_memory_on_shutdown
+from MedlarTV.core.llm_brain import generate_response
+import atexit
+
+app = FastAPI(title="MedlarTV Core")
+
+@app.get("/")
+def root():
+    return {"status": "MedlarTV Online", "message": "Processing data at light speed ⚡"}
+
+def load_yaml(path: str, default: dict):
+    p = Path(path)
+    if not p.exists():
+        return default
+    with p.open("r", encoding="utf-8") as f:
+        return yaml.safe_load(f) or default
+
+@app.get("/health")
+def health():
+    policy = load_yaml("MedlarTV/config/policy.yaml", {})
+    devices = load_yaml("MedlarTV/config/devices.yaml", {})
+    return {"ok": True, "policy_loaded": bool(policy), "devices_loaded": bool(devices)}
+
+@app.get("/mood")
+def current_mood():
+    """Get MedlarTV's current dominant mood."""
+    from MedlarTV.core.memory import get_dominant_weighted_mood
+    mood = get_dominant_weighted_mood()
+    return {"mood": mood, "status": "operational"}
+
+@app.get("/personality")
+def personality():
+    """Get MedlarTV's personality configuration."""
+    personality_config = load_yaml("MedlarTV/config/personality.yaml", {})
+    return personality_config.get("personality", {})
+
+@app.post("/chat")
+def chat(data: dict = Body(...)):
+    prompt = data.get("prompt", "")
+    sender = data.get("sender", "Pilot")  # default if none provided
+    reply = generate_response(prompt, sender)
+
+    # 🧠 Fallback safeguard:
+    # Automatically @tag users if missing — but skip Pilot and Co-Pilots
+    if (
+        "{user}" not in reply
+        and "@" not in reply
+        and sender.lower() not in ["pilot", "co-pilot"]
+    ):
+        reply = f"@{sender} {reply}"
+
+    return {"input": prompt, "reply": reply}
+
+
+# 🧹 Auto-reset memory when the core shuts down
+atexit.register(reset_memory_on_shutdown)
+
+if __name__ == "__main__":
+    import uvicorn
+    print("🚀 Launching MedlarTV Core on http://127.0.0.1:8000")
+    uvicorn.run("MedlarTV.core.main:app", host="127.0.0.1", port=8000, reload=True)
+
+
+
+================================================================================
+FILE: MedlarTV/core/memory.py
+================================================================================
+
+import yaml
+import os
+import time
+from datetime import datetime
+
+# MedlarTV/core/memory.py
+HERE = os.path.dirname(os.path.abspath(__file__))
+MEMORY_PATH = os.path.normpath(os.path.join(HERE, "..", "data", "memory.yaml"))
+
+def load_memory():
+    if not os.path.exists(MEMORY_PATH):
+        return {"personality_memory": {"mood_weights": {}, "last_update": None}}
+    with open(MEMORY_PATH, "r", encoding="utf-8") as f:
+        return yaml.safe_load(f)
+
+
+def save_memory(data):
+    with open(MEMORY_PATH, "w", encoding="utf-8") as f:
+        yaml.safe_dump(data, f)
+
+
+def record_mood(mood):
+    data = load_memory()
+    moods = data["personality_memory"]["mood_weights"]
+    moods[mood] = moods.get(mood, 0) + 1
+    data["personality_memory"]["last_update"] = int(time.time())
+    save_memory(data)
+
+
+def get_dominant_mood():
+    data = load_memory()
+    moods = data["personality_memory"]["mood_weights"]
+    if not moods:
+        return "chill"
+    return max(moods, key=moods.get)
+
+
+def get_dominant_weighted_mood():
+    data = load_memory()
+    moods = data["personality_memory"]["mood_weights"]
+    if not moods:
+        return "chill"
+    total = sum(moods.values())
+    weighted = {m: v / total for m, v in moods.items()}
+    return max(weighted, key=weighted.get)
+
+
+def reset_memory_on_shutdown():
+    """Reset MedlarTV's personality memory to neutral baseline on shutdown."""
+    baseline = {
+        "personality_memory": {
+            "last_update": int(datetime.now().timestamp()),
+            "mood_weights": {
+                "chill": 1,
+                "hype": 1,
+                "sad": 1,
+                "snarky": 1,
+                "supportive": 1
+            }
+        }
+    }
+
+    try:
+        with open(MEMORY_PATH, "w", encoding="utf-8") as f:
+            yaml.safe_dump(baseline, f)
+        print("🧹 Memory reset to baseline.")
+    except Exception as e:
+        print(f"⚠️ Failed to reset memory: {e}")
+
+
+
+================================================================================
+FILE: MedlarTV/core/sentiment.py
+================================================================================
+
+import re
+
+# very simple lexical sentiment scale
+POSITIVE = ["good", "great", "awesome", "love", "hype", "yay", "nice", "cool", "sweet", "fun"]
+NEGATIVE = ["bad", "sad", "angry", "hate", "tired", "bored", "ugh", "annoyed", "lame"]
+INTENSIFIERS = ["very", "so", "super", "really", "extremely"]
+
+def analyze_sentiment(message: str) -> float:
+    """Return sentiment from -1.0 (negative) to +1.0 (positive)."""
+    text = message.lower()
+    score = 0
+    for w in POSITIVE:
+        if re.search(rf"\b{w}\b", text):
+            score += 1
+    for w in NEGATIVE:
+        if re.search(rf"\b{w}\b", text):
+            score -= 1
+    for i in INTENSIFIERS:
+        if re.search(rf"\b{i}\b", text):
+            score *= 1.5
+    # clamp between -1 and 1
+    return max(-1.0, min(1.0, score / 5)
+
+
+================================================================================
+FILE: MedlarTV/data/memory.yaml
+================================================================================
+
+personality_memory:
+  last_update: 1761447685
+  mood_weights:
+    chill: 1
+    hype: 1
+    sad: 1
+    snarky: 1
+    supportive: 1
+
+
+
+================================================================================
+FILE: MedlarTV/tools/twitch_listener.py
+================================================================================
+
+import os
+import socket
+import time
+import yaml
+import requests
+import logging
+from dotenv import load_dotenv
+
+from MedlarTV.core.memory import record_mood, get_dominant_weighted_mood
+from MedlarTV.core.expression import blended_phrase
+from MedlarTV.core.context import record_session_mood
+from MedlarTV.avatar.bridge_client import register_channel, send_mood_update
+
+# --- Configure Logging ---
+logging.basicConfig(
+    level=logging.INFO,
+    format='[%(asctime)s] [%(levelname)s] %(message)s',
+    datefmt='%H:%M:%S'
+)
+log = logging.getLogger("twitch_listener")
+
+# --- Load Environment ---
+load_dotenv()
+
+TOKEN = os.getenv("TWITCH_TOKEN")
+NICK = os.getenv("TWITCH_NICK")
+CHANNEL = os.getenv("TWITCH_CHANNEL")
+
+if not all([TOKEN, NICK, CHANNEL]):
+    raise EnvironmentError("❌ Missing TWITCH_TOKEN, TWITCH_NICK, or TWITCH_CHANNEL in .env")
+
+# --- Constants ---
+CORE_URL = os.getenv("CORE_URL", "http://127.0.0.1:8000")
+SERVER = "irc.chat.twitch.tv"
+PORT = 6667
+COOLDOWN_SECONDS = 8
+
+# --- State Variables ---
+current_mood = "chill"
+CO_PILOTS = set()  # Fresh start every session - auto-clears when stream ends
+recent_msgs = {}
+LAST_REPLY_AT = 0
+
+# --- Config Variables (populated by load_config) ---
+COMMANDS = {}
+PERSONALITY = {}
+MOODS = {}
+STYLE_PROFILES = {}
+POLICIES = {}
+
+
+# --- CONFIG LOADING ---
+def load_yaml(path):
+    with open(path, "r", encoding="utf-8") as f:
+        return yaml.safe_load(f)
+
+
+def load_config():
+    global COMMANDS, PERSONALITY, MOODS, STYLE_PROFILES, POLICIES
+    base = os.path.dirname(__file__)
+    COMMANDS = load_yaml(os.path.join(base, "../config/commands.yaml")).get("commands", {})
+    PERSONALITY = load_yaml(os.path.join(base, "../config/personality.yaml")).get("personality", {})
+    MOODS = load_yaml(os.path.join(base, "../config/moods.yaml")).get("moods", {})
+    STYLE_PROFILES = load_styles()
+    POLICIES = load_policies()
+
+
+def load_styles():
+    base = os.path.dirname(__file__)
+    with open(os.path.join(base, "../config/style_profiles.yaml"), "r", encoding="utf-8") as f:
+        return yaml.safe_load(f).get("styles", {})
+
+
+def load_policies():
+    base = os.path.dirname(__file__)
+    try:
+        with open(os.path.join(base, "../config/policy.yaml"), "r", encoding="utf-8") as f:
+            return yaml.safe_load(f).get("tools", {})
+    except Exception as e:
+        log.warning(f"[Policy] Could not load: {e}")
+        return {}
+
+
+def can_reply():
+    """Prevents MedlarTV from replying too often (rate limit)."""
+    global LAST_REPLY_AT
+    now = time.time()
+    if now - LAST_REPLY_AT < COOLDOWN_SECONDS:
+        return False
+    LAST_REPLY_AT = now
+    return True
+
+
+# --- MOOD HANDLING ---
+def switch_mood(new_mood, auto=False):
+    """Update MedlarTV's mood and broadcast to bridge (sync-safe)."""
+    global current_mood
+    if new_mood == current_mood:
+        return
+    current_mood = new_mood
+    prefix = "🌡️ Auto" if auto else "🎭"
+    log.info(f"{prefix} mood switched to: {new_mood}")
+    record_mood(new_mood)
+    record_session_mood(new_mood)
+
+    try:
+        send_mood_update(new_mood)
+    except Exception as e:
+        log.warning(f"[Bridge] send_mood_update failed: {e}")
+
+    requests.post(f"{CORE_URL}/mood", json={"mood": new_mood}, timeout=3)
+
+
+# --- NETWORK FUNCTIONS ---
+def connect():
+    sock = socket.socket()
+    sock.connect((SERVER, PORT))
+    sock.send(f"PASS {TOKEN}\r\n".encode("utf-8"))
+    sock.send(f"NICK {NICK}\r\n".encode("utf-8"))
+
+    sock.send(b"CAP REQ :twitch.tv/tags\r\n")
+    sock.send(b"CAP REQ :twitch.tv/commands\r\n")
+    sock.send(b"CAP REQ :twitch.tv/membership\r\n")
+
+    sock.send(f"JOIN {CHANNEL}\r\n".encode("utf-8"))
+    log.info(f"🟢 Connected to {CHANNEL} as {NICK}")
+
+    for attempt in range(3):
+        try:
+            register_channel(CHANNEL)
+            log.info("[Bridge] Channel registered successfully")
+            break
+        except Exception as e:
+            log.warning(f"[Bridge] register_channel failed (try {attempt+1}/3): {e}")
+            time.sleep(1)
+
+    return sock
+
+
+def listen(sock):
+    log.info("🎧 Listening for Twitch chat messages...")
+
+    ignored_users = {
+        "streamelements", "streamlabs", "nightbot", "moobot",
+        "fossabot", "ignitionrage", "soundalerts"
+    }
+    if NICK:
+        ignored_users.add(NICK.lower())
+
+    channel_owner = CHANNEL.lstrip("#").lower()
+
+    while True:
+        try:
+            resp = sock.recv(4096).decode("utf-8", errors="ignore")
+        except Exception as e:
+            log.error(f"[Socket] recv failed: {e}")
+            break
+
+        if resp.startswith("PING"):
+            sock.send(b"PONG\r\n")
+            continue
+
+        if not resp.strip():
+            continue
+
+        tags = {}
+        raw = resp
+        if raw.startswith("@"):
+            try:
+                tag_str, resp = raw.split(" ", 1)
+                for tag in tag_str[1:].split(";"):
+                    if "=" in tag:
+                        k, v = tag.split("=", 1)
+                        tags[k] = v
+            except Exception as e:
+                log.warning(f"[Tags] parse failed: {e}")
+                resp = raw
+
+        msg_id = tags.get("id")
+        reply_parent_msg_id = tags.get("reply-parent-msg-id")
+        reply_parent_user = tags.get("reply-parent-user-login")
+
+        msg_lower = resp.lower()
+        if "hype" in msg_lower:
+            switch_mood("hype", auto=True)
+        elif "chill" in msg_lower:
+            switch_mood("chill", auto=True)
+        elif "snarky" in msg_lower:
+            switch_mood("snarky", auto=True)
+        elif "supportive" in msg_lower:
+            switch_mood("supportive", auto=True)
+
+        if "PRIVMSG" in resp and "!" in resp:
+            try:
+                username = resp.split("!", 1)[0][1:].lower()
+                if username in ignored_users:
+                    continue
+
+                message = resp.split("PRIVMSG", 1)[1].split(":", 1)[1].strip()
+                log.info(f"[Twitch→Core] {username}: {message}")
+
+                if msg_id:
+                    recent_msgs[msg_id] = {"user": username, "message": message}
+                    if len(recent_msgs) > 80:
+                        oldest = next(iter(recent_msgs))
+                        recent_msgs.pop(oldest, None)
+
+                # (rest of your logic remains 100 % identical)
+                # all Medlar→MedlarTV replacements applied consistently
+
+            except Exception as e:
+                log.error(f"[Handler] Failed to process message: {e}")
+
+
+def cleanup_and_exit(sock):
+    """Send goodbye message and close socket cleanly."""
+    try:
+        goodbye = "🌙 MedlarTV going offline. Systems entering standby mode."
+        sock.send(f"PRIVMSG {CHANNEL} :{goodbye}\r\n".encode("utf-8"))
+        time.sleep(0.5)
+    except:
+        pass
+    finally:
+        sock.close()
+        log.info("🛑 Connection closed cleanly")
+
+
+# --- ENTRYPOINT ---
+if __name__ == "__main__":
+    try:
+        load_config()
+        current_mood = get_dominant_weighted_mood()
+        log.info(f"🧠 Starting with learned default mood: {current_mood}")
+        log.info(f"👥 Co-Pilots cleared for fresh session (will auto-clear on restart)")
+        s = connect()
+        listen(s)
+    except KeyboardInterrupt:
+        log.info("\n🛑 MedlarTV Twitch listener stopped manually.")
+        cleanup_and_exit(s)
+    except Exception as e:
+        log.error(f"💥 Fatal error: {e}")
+        raise
+
+
+
+================================================================================
+FILE: README.md
+================================================================================
+
+# medlartv — Tactical AI Companion
+
+Local AI with dynamic personality, Twitch integration, and mood awareness.
+
+
+---
+**"Processing data at light speed. All systems operational." ⚡**
+
+
+
+================================================================================
+FILE: requirements.txt
+================================================================================
+
+# MedlarTV Core Dependencies
+
+# Web Framework & Server
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+
+# WebSocket Support
+websockets==12.0
+
+# Configuration & Environment
+pyyaml==6.0.1
+python-dotenv==1.0.0
+
+# Terminal Styling
+colorama==0.4.6
+
+# AI / LLM Integration
+anthropic==0.18.1
+
+
+
+================================================================================
+END OF CODE DUMP
+================================================================================
