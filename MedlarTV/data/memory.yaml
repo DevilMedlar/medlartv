@@ -1,8 +1,7 @@
 personality_memory:
-  last_update: 1761447685
+  last_update: 1761460099
   mood_weights:
     chill: 1
     hype: 1
-    sad: 1
     snarky: 1
     supportive: 1

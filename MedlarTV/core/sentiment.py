@@ -19,4 +19,4 @@ def analyze_sentiment(message: str) -> float:
         if re.search(rf"\b{i}\b", text):
             score *= 1.5
     # clamp between -1 and 1
-    return max(-1.0, min(1.0, score / 5)
+    return max(-1.0, min(1.0, score / 5))
