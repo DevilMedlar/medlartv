@@ -700,6 +700,44 @@ commands:
   help:
     response: "Available commands: !ping, !status, !hello, !hype, !medlar, !mood, !moodnumbers, !help"
 
+    # Co-Pilot Management Commands (Pilot only)
+  addcopilot:
+    response: "Co-Pilot {target} registered! Welcome to the squad! 🚀"
+    requires_pilot: true
+  
+  removecopilot:
+    response: "Co-Pilot {target} unregistered. Thanks for flying with us! o7"
+    requires_pilot: true
+  
+  listcopilots:
+    response: "Active Co-Pilots: {copilots}"
+    
+
+
+================================================================================
+FILE: MedlarTV/config/copilots.yaml
+================================================================================
+
+# MedlarTV Co-Pilot Configuration
+# Co-Pilots are guest streamers in Stream Together sessions
+
+copilots:
+  # Active co-pilots (managed via !addcopilot command)
+  active: []
+  
+  # Historical co-pilots (for reference)
+  history: []
+
+# Example after adding co-pilots:
+# copilots:
+#   active:
+#     - username: saacorey
+#       added_at: 1234567890
+#       added_by: devilmedlar
+#   history:
+#     - username: previousguest
+#       sessions: 5
+
 
 ================================================================================
 FILE: MedlarTV/config/devices.yaml
@@ -1324,6 +1362,7 @@ import yaml
 import requests
 import logging
 from dotenv import load_dotenv
+from pathlib import Path
 
 from MedlarTV.core.memory import record_mood, get_dominant_weighted_mood
 from MedlarTV.core.expression import blended_phrase
@@ -1356,9 +1395,11 @@ COOLDOWN_SECONDS = 8
 
 # --- State Variables ---
 current_mood = "chill"
-CO_PILOTS = set()  # Fresh start every session - auto-clears when stream ends
+CO_PILOTS = set()  # Active co-pilots (usernames)
+PILOT = CHANNEL.lstrip("#").lower()  # Channel owner is the Pilot
 recent_msgs = {}
 LAST_REPLY_AT = 0
+COPILOT_CONFIG_PATH = Path("MedlarTV/config/copilots.yaml")
 
 # --- Config Variables (populated by load_config) ---
 COMMANDS = {}
@@ -1368,8 +1409,90 @@ STYLE_PROFILES = {}
 POLICIES = {}
 
 
+# --- CO-PILOT MANAGEMENT ---
+def load_copilots():
+    """Load co-pilots from config file."""
+    global CO_PILOTS
+    if not COPILOT_CONFIG_PATH.exists():
+        # Create default config
+        default_config = {"copilots": {"active": [], "history": []}}
+        COPILOT_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(COPILOT_CONFIG_PATH, 'w', encoding='utf-8') as f:
+            yaml.safe_dump(default_config, f)
+        return
+    
+    with open(COPILOT_CONFIG_PATH, 'r', encoding='utf-8') as f:
+        data = yaml.safe_load(f) or {}
+    
+    active = data.get("copilots", {}).get("active", [])
+    CO_PILOTS = {entry["username"].lower() for entry in active}
+    log.info(f"📋 Loaded {len(CO_PILOTS)} co-pilots: {', '.join(CO_PILOTS) if CO_PILOTS else 'none'}")
+
+
+def save_copilots():
+    """Save co-pilots to config file."""
+    data = {"copilots": {"active": [], "history": []}}
+    
+    if COPILOT_CONFIG_PATH.exists():
+        with open(COPILOT_CONFIG_PATH, 'r', encoding='utf-8') as f:
+            data = yaml.safe_load(f) or data
+    
+    # Update active list
+    data["copilots"]["active"] = [
+        {"username": username, "added_at": int(time.time())}
+        for username in CO_PILOTS
+    ]
+    
+    with open(COPILOT_CONFIG_PATH, 'w', encoding='utf-8') as f:
+        yaml.safe_dump(data, f)
+
+
+def add_copilot(username: str) -> bool:
+    """Add a co-pilot."""
+    username = username.lower()
+    if username in CO_PILOTS:
+        return False
+    CO_PILOTS.add(username)
+    save_copilots()
+    log.info(f"✅ Co-Pilot added: {username}")
+    return True
+
+
+def remove_copilot(username: str) -> bool:
+    """Remove a co-pilot."""
+    username = username.lower()
+    if username not in CO_PILOTS:
+        return False
+    CO_PILOTS.remove(username)
+    save_copilots()
+    log.info(f"❌ Co-Pilot removed: {username}")
+    return True
+
+
+def get_user_role(username: str) -> str:
+    """Determine user's role: pilot, copilot, or user."""
+    username = username.lower()
+    if username == PILOT:
+        return "pilot"
+    elif username in CO_PILOTS:
+        return "copilot"
+    else:
+        return "user"
+
+
+def format_username(username: str) -> str:
+    """Format username based on role."""
+    role = get_user_role(username)
+    if role == "pilot":
+        return "Pilot"
+    elif role == "copilot":
+        return f"Co-Pilot {username}"
+    else:
+        return f"@{username}"
+
+
 # --- CONFIG LOADING ---
-def load_yaml(path):
+def load_yaml_file(path):
     with open(path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
@@ -1377,11 +1500,12 @@ def load_yaml(path):
 def load_config():
     global COMMANDS, PERSONALITY, MOODS, STYLE_PROFILES, POLICIES
     base = os.path.dirname(__file__)
-    COMMANDS = load_yaml(os.path.join(base, "../config/commands.yaml")).get("commands", {})
-    PERSONALITY = load_yaml(os.path.join(base, "../config/personality.yaml")).get("personality", {})
-    MOODS = load_yaml(os.path.join(base, "../config/moods.yaml")).get("moods", {})
+    COMMANDS = load_yaml_file(os.path.join(base, "../config/commands.yaml")).get("commands", {})
+    PERSONALITY = load_yaml_file(os.path.join(base, "../config/personality.yaml")).get("personality", {})
+    MOODS = load_yaml_file(os.path.join(base, "../config/moods.yaml")).get("moods", {})
     STYLE_PROFILES = load_styles()
     POLICIES = load_policies()
+    load_copilots()  # Load co-pilots
 
 
 def load_styles():
@@ -1451,21 +1575,56 @@ def handle_command(sock, username, message, msg_id=None):
         return False
     
     cmd_config = COMMANDS[cmd]
+    
+    # Check if command requires pilot permission
+    if cmd_config.get("requires_pilot", False):
+        if get_user_role(username) != "pilot":
+            send_reply(sock, f"@{username} ⛔ This command is restricted to Pilot only.", msg_id)
+            return True
+    
     response = cmd_config.get("response", "")
     
-    # Format the response
-    response = response.replace("{user}", username)
+    # Format the response with user role
+    formatted_user = format_username(username)
+    response = response.replace("{user}", formatted_user)
     response = response.replace("{nick}", NICK)
     
-    # Special handling for certain commands
+    # Special command handling
     if cmd == "moodnumbers":
         from MedlarTV.core.memory import load_memory
         data = load_memory()
         moods = data["personality_memory"]["mood_weights"]
-        response = f"@{username} 📊 Mood Stats: " + " | ".join([f"{m}: {v}" for m, v in moods.items()])
+        response = f"{formatted_user} 📊 Mood Stats: " + " | ".join([f"{m}: {v}" for m, v in moods.items()])
     
     elif cmd == "mood":
-        response = f"@{username} Current mood: {current_mood} {MOODS.get(current_mood, {}).get('emoji', [''])[0]}"
+        response = f"{formatted_user} Current mood: {current_mood} {MOODS.get(current_mood, {}).get('emoji', [''])[0]}"
+    
+    elif cmd == "addcopilot":
+        if len(parts) < 2:
+            response = f"{formatted_user} Usage: !addcopilot username"
+        else:
+            target = parts[1].lstrip("@").lower()
+            if add_copilot(target):
+                response = response.replace("{target}", target)
+            else:
+                response = f"{formatted_user} {target} is already a Co-Pilot!"
+    
+    elif cmd == "removecopilot":
+        if len(parts) < 2:
+            response = f"{formatted_user} Usage: !removecopilot username"
+        else:
+            target = parts[1].lstrip("@").lower()
+            if remove_copilot(target):
+                response = response.replace("{target}", target)
+            else:
+                response = f"{formatted_user} {target} is not a Co-Pilot!"
+    
+    elif cmd == "listcopilots":
+        if CO_PILOTS:
+            copilot_list = ", ".join(sorted(CO_PILOTS))
+            response = response.replace("{copilots}", copilot_list)
+        else:
+            response = f"{formatted_user} No active Co-Pilots."
     
     send_reply(sock, response, msg_id)
     return True
@@ -1508,9 +1667,13 @@ def should_respond_to_message(username, message):
 def get_llm_response(username, message):
     """Get AI response from the Core API."""
     try:
+        # Pass the formatted role instead of raw username
+        role = get_user_role(username)
+        sender = format_username(username) if role != "user" else username
+        
         response = requests.post(
             f"{CORE_URL}/chat",
-            json={"prompt": message, "sender": username},
+            json={"prompt": message, "sender": sender},
             timeout=10
         )
         
@@ -1546,6 +1709,7 @@ def format_reply_with_mood(reply):
 
 # --- NETWORK FUNCTIONS ---
 def connect():
+    """Connect to Twitch IRC and join all relevant channels."""
     sock = socket.socket()
     sock.connect((SERVER, PORT))
     sock.send(f"PASS {TOKEN}\r\n".encode("utf-8"))
@@ -1555,9 +1719,17 @@ def connect():
     sock.send(b"CAP REQ :twitch.tv/commands\r\n")
     sock.send(b"CAP REQ :twitch.tv/membership\r\n")
 
+    # Join main channel (Pilot's channel)
     sock.send(f"JOIN {CHANNEL}\r\n".encode("utf-8"))
-    log.info(f"🟢 Connected to {CHANNEL} as {NICK}")
+    log.info(f"🟢 Connected to {CHANNEL} as {NICK} (Pilot: {PILOT})")
 
+    # Join all co-pilot channels
+    for copilot in CO_PILOTS:
+        copilot_channel = f"#{copilot}"
+        sock.send(f"JOIN {copilot_channel}\r\n".encode("utf-8"))
+        log.info(f"🔗 Joined Co-Pilot channel: {copilot_channel}")
+
+    # Register with bridge
     for attempt in range(3):
         try:
             register_channel(CHANNEL)
@@ -1579,8 +1751,6 @@ def listen(sock):
     }
     if NICK:
         ignored_users.add(NICK.lower())
-
-    channel_owner = CHANNEL.lstrip("#").lower()
 
     while True:
         try:
@@ -1612,7 +1782,6 @@ def listen(sock):
 
         msg_id = tags.get("id")
         reply_parent_msg_id = tags.get("reply-parent-msg-id")
-        reply_parent_user = tags.get("reply-parent-user-login")
 
         # Auto mood detection from keywords
         msg_lower = resp.lower()
@@ -1637,7 +1806,11 @@ def listen(sock):
                     continue
 
                 message = resp.split("PRIVMSG", 1)[1].split(":", 1)[1].strip()
-                log.info(f"[Twitch→Core] {username}: {message}")
+                
+                # Log with role
+                role = get_user_role(username)
+                role_tag = {"pilot": "[PILOT]", "copilot": "[CO-PILOT]", "user": ""}.get(role, "")
+                log.info(f"[Twitch→Core] {role_tag} {username}: {message}")
 
                 # Store message in recent history
                 if msg_id:
@@ -1672,7 +1845,7 @@ def listen(sock):
                     # Format with mood styling
                     formatted_reply = format_reply_with_mood(llm_reply)
                     
-                    # Send the reply (with threading if this was a reply to us)
+                    # Send the reply (always to main channel only)
                     send_reply(sock, formatted_reply, msg_id if reply_parent_msg_id else None)
                 else:
                     log.warning("[LLM] No response generated")
@@ -1702,7 +1875,8 @@ if __name__ == "__main__":
         load_config()
         current_mood = get_dominant_weighted_mood()
         log.info(f"🧠 Starting with learned default mood: {current_mood}")
-        log.info(f"👥 Co-Pilots cleared for fresh session (will auto-clear on restart)")
+        log.info(f"👤 Pilot: {PILOT}")
+        log.info(f"👥 Co-Pilots: {', '.join(CO_PILOTS) if CO_PILOTS else 'none'}")
         s = connect()
         listen(s)
     except KeyboardInterrupt:
