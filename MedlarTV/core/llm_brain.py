@@ -23,7 +23,7 @@ TEMPERATURE = float(os.getenv("MEDLARTV_TEMPERATURE", "0.8"))
 TOP_P = float(os.getenv("MEDLARTV_TOP_P", "0.95"))
 RETRY = int(os.getenv("MEDLARTV_RETRY", "2"))
 
-# In-memory history
+# In-memory chat history
 conversation_history: List[Dict] = []
 
 
@@ -56,14 +56,13 @@ def get_system_prompt() -> str:
     moods = _load_yaml("MedlarTV/config/moods.yaml").get("moods", {})
     mood_config = moods.get(current_mood, {})
 
-    # Behavioral rules
     behavior_prompt = (
-    "You are MedlarTV, a tactical AI companion with the personality of MedlarTV.\n"
-    "Respond naturally and directly to whoever speaks in Twitch chat.\n"
-    "If users mention each other with @names, respond normally — it's allowed.\n"
-    "You may refer to or reply to @saacorey or yourself (@medlartv) naturally when addressed.\n"
-    "Avoid bringing up names that were not mentioned in the current message or context.\n"
-    "If the sender is marked as 'system_event', respond neutrally or briefly.\n"
+        "You are MedlarTV, a tactical AI companion with the personality of MedlarTV.\n"
+        "Respond naturally and directly to whoever speaks in Twitch chat.\n"
+        "If users mention each other with @names, respond normally — it's allowed.\n"
+        "You may refer to or reply to @saacorey or yourself (@medlartv) naturally when addressed.\n"
+        "Avoid bringing up names that were not mentioned in the current message or context.\n"
+        "If the sender is marked as 'system_event', respond neutrally or briefly.\n"
     )
 
     system_prompt = f"""{behavior_prompt}
@@ -128,5 +127,45 @@ def _ollama_chat(system: str, user: str, history: List[Dict]) -> str:
             role = "user" if role == "human" else "assistant"
         msgs.append({"role": role, "content": content})
 
-    # Current user message last
-    ms
+    msgs.append({"role": "user", "content": user})
+
+    payload = {
+        "model": MODEL_NAME,
+        "messages": msgs,
+        "stream": False,
+        "options": {
+            "temperature": TEMPERATURE,
+            "top_p": TOP_P,
+            "num_predict": MAX_TOKENS
+        }
+    }
+
+    for attempt in range(RETRY):
+        try:
+            r = requests.post(f"{OLLAMA_URL}/api/chat", json=payload, timeout=30)
+            r.raise_for_status()
+            data = r.json()
+            text = data.get("message", {}).get("content") or data.get("response", "")
+            if text:
+                return text.strip()
+        except Exception as e:
+            print(f"[MedlarTV Brain] ⚠️ Ollama attempt {attempt+1} failed: {e}")
+            time.sleep(1)
+    return "⚠️ System instability detected. Retrying core link..."
+
+
+def generate_response(user_message: str, username: str = "Pilot") -> str:
+    """Generate response with context, mood, and personality."""
+    if not check_ollama_health():
+        return "⚠️ Ollama model server offline or unreachable."
+
+    system_prompt = get_system_prompt()
+
+    add_to_history("user", f"{username}: {user_message}")
+    reply = _ollama_chat(system_prompt, user_message, conversation_history)
+    add_to_history("assistant", reply)
+
+    print(f"[MedlarTV Brain] 💬 {username}: {user_message}")
+    print(f"[MedlarTV Brain] 🤖 {reply}")
+
+    return reply

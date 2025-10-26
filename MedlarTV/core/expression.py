@@ -1,6 +1,6 @@
 import random
-from Medlar.core.memory import load_memory
-from Medlar.core.context import get_contextual_mix
+from MedlarTV.core.memory import load_memory
+from MedlarTV.core.context import get_contextual_mix
 
 VOCAB = {
     "hype": ["LET'S GOOO!!!", "We're SO back!", "🔥🔥🔥", "WOO!!"],
