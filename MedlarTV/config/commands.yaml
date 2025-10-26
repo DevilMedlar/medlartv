@@ -22,3 +22,16 @@ commands:
   
   help:
     response: "Available commands: !ping, !status, !hello, !hype, !medlar, !mood, !moodnumbers, !help"
+
+    # Co-Pilot Management Commands (Pilot only)
+  addcopilot:
+    response: "Co-Pilot {target} registered! Welcome to the squad! 🚀"
+    requires_pilot: true
+  
+  removecopilot:
+    response: "Co-Pilot {target} unregistered. Thanks for flying with us! o7"
+    requires_pilot: true
+  
+  listcopilots:
+    response: "Active Co-Pilots: {copilots}"
+    

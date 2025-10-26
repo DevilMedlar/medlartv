@@ -1,0 +1,19 @@
+# MedlarTV Co-Pilot Configuration
+# Co-Pilots are guest streamers in Stream Together sessions
+
+copilots:
+  # Active co-pilots (managed via !addcopilot command)
+  active: []
+  
+  # Historical co-pilots (for reference)
+  history: []
+
+# Example after adding co-pilots:
+# copilots:
+#   active:
+#     - username: saacorey
+#       added_at: 1234567890
+#       added_by: devilmedlar
+#   history:
+#     - username: previousguest
+#       sessions: 5
