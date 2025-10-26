@@ -37,10 +37,10 @@ FILE: .devcontainer/devcontainer.json
     "source=${localWorkspaceFolder}/MedlarTV,target=/workspaces/medlartv,type=bind"
   ],
 
-  "forwardPorts": [8000, 7860],
+  "forwardPorts": [8000, 8765],
   "portsAttributes": {
     "8000": { "label": "FastAPI Server" },
-    "7860": { "label": "Avatar Bridge" }
+    "8765": { "label": "Avatar Bridge" }
   },
 
   "env": {
@@ -299,7 +299,8 @@ FILE: .vscode/settings.json
 {
     "python.terminal.useEnvFile": true,
     "python-envs.defaultEnvManager": "ms-python.python:system",
-    "python-envs.pythonProjects": []
+    "python-envs.pythonProjects": [],
+    "python.REPL.enableREPLSmartSend": false
 }
 
 
@@ -1305,6 +1306,7 @@ personality_memory:
 FILE: MedlarTV/tools/__init__.py
 ================================================================================
 
+# tools content
 """
 MedlarTV Tools Module
 External integrations and utilities (Twitch, etc.)
