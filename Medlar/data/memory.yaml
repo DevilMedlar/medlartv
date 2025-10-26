@@ -1,0 +1,8 @@
+personality_memory:
+  last_update: 
+  mood_weights:
+    chill: 1
+    hype: 1
+    sad: 1
+    snarky: 1
+    supportive: 1

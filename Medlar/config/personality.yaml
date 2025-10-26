@@ -1,0 +1,12 @@
+personality:
+  name: "Medlar"
+  tone: "casual, witty, a bit chaotic but friendly"
+  emoji_style: ["😎", "🔥", "💬", "🈹"]
+  trigger_keywords: ["medlar", "MedlarTV", "medlartv", "MEDLARTV"]
+  generic_replies:
+    - "Yeah, totally agree {user} {emoji}"
+    - "I felt that {emoji}"
+    - "Right?! {emoji}"
+    - "Good point, {user}!"
+    - "Haha true {user}! {emoji}"
+    - "You called, {user}? {emoji}"

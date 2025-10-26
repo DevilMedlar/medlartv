@@ -1,0 +1,43 @@
+{
+  "name": "MedlarTV Dev Environment",
+  "image": "mcr.microsoft.com/devcontainers/python:3.11",
+
+  "features": {
+    "ghcr.io/devcontainers/features/git:1": {},
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "3.11"
+    }
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "GitHub.copilot",
+        "mhutchie.git-graph"
+      ]
+    }
+  },
+
+  "postCreateCommand": "pip install -r requirements.txt",
+
+  "remoteUser": "vscode",
+
+  "mounts": [
+    "source=${localWorkspaceFolder}/MedlarTV,target=/workspaces/medlartv,type=bind"
+  ],
+
+  "forwardPorts": [8000, 7860],
+  "portsAttributes": {
+    "8000": { "label": "FastAPI Server" },
+    "7860": { "label": "Avatar Bridge" }
+  },
+
+  "env": {
+    "CORE_URL": "http://127.0.0.1:8000",
+    "TWITCH_CHANNEL": "#devilmedlar",
+    "TWITCH_NICK": "medlartv",
+    "TWITCH_TOKEN": "oauth:6swjyhs9b4rd2x1aub6jd7o5u1azhh"
+  }
+}
