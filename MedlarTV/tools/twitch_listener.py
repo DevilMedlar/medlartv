@@ -321,7 +321,14 @@ def get_llm_response(username, message):
         
         if response.status_code == 200:
             data = response.json()
-            return data.get("reply", "")
+            reply = data.get("reply", "")
+            
+            # Limit response to 500 characters (Twitch message limit)
+            if len(reply) > 500:
+                reply = reply[:497] + "..."
+                log.warning(f"[LLM] Response truncated to 500 chars")
+            
+            return reply
         else:
             log.error(f"[Core] API returned {response.status_code}")
             return None
