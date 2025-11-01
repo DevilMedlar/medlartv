@@ -21,9 +21,9 @@ commands:
     response: "Current mood: {mood} | All systems operational"
   
   help:
-    response: "Available commands: !ping, !status, !hello, !hype, !medlar, !mood, !moodnumbers, !help"
-
-    # Co-Pilot Management Commands (Pilot only)
+    response: "Available commands: !ping, !status, !hello, !hype, !medlar, !mood, !moodnumbers, !addcopilot, !removecopilot, !listcopilots, !help"
+  
+  # Co-Pilot Management Commands (Pilot only)
   addcopilot:
     response: "Co-Pilot {target} registered! Welcome to the squad! 🚀"
     requires_pilot: true
@@ -34,4 +34,3 @@ commands:
   
   listcopilots:
     response: "Active Co-Pilots: {copilots}"
-    

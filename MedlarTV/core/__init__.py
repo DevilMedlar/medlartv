@@ -25,6 +25,11 @@ from .context import (
 
 from .expression import blended_phrase
 from .sentiment import analyze_sentiment
+from .fuzzy_trigger import (
+    should_respond as fuzzy_should_respond,
+    find_triggers_in_message,
+    is_trigger_word
+)
 
 __all__ = [
     # Memory functions
@@ -47,4 +52,9 @@ __all__ = [
     # Expression & Sentiment
     'blended_phrase',
     'analyze_sentiment',
+    
+    # Fuzzy Trigger Detection
+    'fuzzy_should_respond',
+    'find_triggers_in_message',
+    'is_trigger_word',
 ]

@@ -10,6 +10,7 @@ from pathlib import Path
 from MedlarTV.core.memory import record_mood, get_dominant_weighted_mood
 from MedlarTV.core.expression import blended_phrase
 from MedlarTV.core.context import record_session_mood
+from MedlarTV.core.fuzzy_trigger import should_respond as fuzzy_should_respond, find_triggers_in_message
 from MedlarTV.avatar.bridge_client import register_channel, send_mood_update
 
 # --- Configure Logging ---
@@ -290,18 +291,16 @@ def should_respond_to_message(username, message):
     """Determine if MedlarTV should respond to this message."""
     msg_lower = message.lower()
     
-    # Always respond if mentioned directly
-    personality_triggers = PERSONALITY.get("trigger_keywords", [])
-    for trigger in personality_triggers:
-        if trigger.lower() in msg_lower:
-            return True
+    # Use fuzzy trigger detection
+    if fuzzy_should_respond(message, strict=False):
+        return True
     
     # Respond to @mentions
     if f"@{NICK.lower()}" in msg_lower:
         return True
     
     # Respond to questions directed at bot
-    if "?" in message and any(word in msg_lower for word in ["medlar", "bot", "ai"]):
+    if "?" in message and fuzzy_should_respond(message, strict=True):
         return True
     
     return False
