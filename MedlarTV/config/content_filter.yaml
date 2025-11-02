@@ -1,0 +1,79 @@
+# MedlarTV Content Filter
+# This file prevents the bot from saying inappropriate things
+# 
+# HOW TO USE:
+# - Add words/phrases you DON'T want the bot to say under "blocked_words"
+# - Add topics you DON'T want the bot to talk about under "blocked_topics"
+# - The bot will refuse to respond if it detects these
+#
+# EASY TO EDIT - Just add new lines with a dash (-) before each word!
+
+# =============================================================================
+# BLOCKED WORDS - Bot will NEVER say these exact words
+# =============================================================================
+blocked_words:
+  # Slurs and hate speech (add more as needed)
+  - "n***a"
+  - "f****t"
+  - "r****d"
+  - "tr***y"
+  
+  # Add your own words here:
+  # - "badword1"
+  # - "badword2"
+
+# =============================================================================
+# BLOCKED TOPICS - Bot will refuse to discuss these topics
+# =============================================================================
+blocked_topics:
+  # Harmful content
+  - "racism"
+  - "nazi"
+  - "hate speech"
+  - "suicide methods"
+  - "self harm"
+  - "drug recipes"
+  
+  # Political extremism
+  - "white supremacy"
+  - "terrorism"
+  
+  # Sexual content
+  - "sexual content"
+  - "porn"
+  - "nsfw"
+  
+  # Add your own topics here:
+  # - "topic1"
+  # - "topic2"
+
+# =============================================================================
+# RESPONSE MODES - Controls how the bot talks
+# =============================================================================
+response_modes:
+  # ALL CAPS MODE - Bot yells in all caps
+  all_caps:
+    enabled: true
+    max_messages: 3  # Stop yelling after this many messages
+    cooldown_seconds: 60  # Wait this long before yelling again
+    
+  # EMOJI SPAM - Prevent too many emojis
+  emoji_limit:
+    enabled: true
+    max_per_message: 3  # Maximum emojis per message
+
+# =============================================================================
+# SAFETY SETTINGS
+# =============================================================================
+safety:
+  # Maximum message length (Twitch limit is 500)
+  max_message_length: 500
+  
+  # Minimum time between bot replies (seconds)
+  cooldown_seconds: 8
+  
+  # Block @mentions of these users (add usernames here)
+  protected_users: []
+  # Example:
+  # - "someuser"
+  # - "anotheruser"
