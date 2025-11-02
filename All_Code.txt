@@ -222,9 +222,7 @@ celerybeat.pid
 *.sage.py
 
 # Environments
-.env
 .envrc
-.venv
 env/
 venv/
 ENV/
@@ -2307,14 +2305,19 @@ def start_component(name, command, wait_time=2):
     print(f"{Fore.CYAN}[START] {name}...{Style.RESET_ALL}")
     
     try:
-        # Start process with output redirected
+        # Set PYTHONPATH environment variable
+        env = os.environ.copy()
+        env['PYTHONPATH'] = os.getcwd()
+        
+        # Start process with updated environment
         process = subprocess.Popen(
             command,
             shell=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            bufsize=1
+            bufsize=1,
+            env=env  
         )
         
         processes.append({
@@ -2395,18 +2398,23 @@ def start_all_components():
     """Start all MedlarTV components in order."""
     components = [
         {
+            "name": "Ollama Server",
+            "command": "ollama serve",
+            "wait": 3
+        },
+        {
             "name": "Core API (FastAPI)",
-            "command": "python3 MedlarTV/core/main.py",
+            "command": "python3 medlartv/MedlarTV/core/main.py",
             "wait": 3
         },
         {
             "name": "WebSocket Bridge",
-            "command": "python3 MedlarTV/avatar/bridge.py",
+            "command": "python3 medlartv/MedlarTV/avatar/bridge.py",
             "wait": 2
         },
         {
             "name": "Twitch Listener",
-            "command": "python3 MedlarTV/tools/twitch_listener.py",
+            "command": "python3 medlartv/MedlarTV/tools/twitch_listener.py",
             "wait": 2
         }
     ]
@@ -2528,10 +2536,11 @@ FILE: start_medlartv.bat
 ================================================================================
 
 @echo off
-REM MedlarTV Launcher Script for Windows
-REM Usage: start_medlartv.bat
+REM MedlarTV Launcher - Windows (PYTHONPATH Fixed)
+title MedlarTV Launcher
 
 color 0B
+
 echo.
 echo ================================================================
 echo.
@@ -2540,10 +2549,10 @@ echo.
 echo ================================================================
 echo.
 
-REM Create logs directory if it doesn't exist
+REM Create logs directory
 if not exist "logs" mkdir logs
 
-REM Check if .env exists
+REM Check .env
 if not exist ".env" (
     color 0C
     echo [ERROR] .env file not found!
@@ -2551,43 +2560,51 @@ if not exist ".env" (
     exit /b 1
 )
 
-echo [START] Launching MedlarTV components...
+REM Start Ollama
+echo [CHECK] Starting Ollama server...
+start "Ollama Server" /min cmd /c "ollama serve > logs\ollama.log 2>&1"
+timeout /t 3 /nobreak >nul
+echo [OK] Ollama started
 echo.
 
-REM Start Core API
-echo [START] Core API ^(FastAPI^)...
-start "MedlarTV Core" /min python MedlarTV/core/main.py
-timeout /t 3 /nobreak >nul
+REM Start Core API (with PYTHONPATH set)
+echo [START] Core API (FastAPI)...
+start "MedlarTV Core" cmd /k "cd /d %CD% && set PYTHONPATH=%CD% && python MedlarTV\core\main.py"
+timeout /t 5 /nobreak >nul
 echo [OK] Core API started
 echo.
 
-REM Start WebSocket Bridge
+REM Start Bridge (with PYTHONPATH set)
 echo [START] WebSocket Bridge...
-start "MedlarTV Bridge" /min python MedlarTV/avatar/bridge.py
-timeout /t 2 /nobreak >nul
+start "MedlarTV Bridge" cmd /k "cd /d %CD% && set PYTHONPATH=%CD% && python MedlarTV\avatar\bridge.py"
+timeout /t 3 /nobreak >nul
 echo [OK] Bridge started
 echo.
 
-REM Start Twitch Listener
+REM Start Twitch Bot (with PYTHONPATH set)
 echo [START] Twitch Listener...
-start "MedlarTV Twitch" python MedlarTV/tools/twitch_listener.py
-timeout /t 2 /nobreak >nul
+start "MedlarTV Twitch" cmd /k "cd /d %CD% && set PYTHONPATH=%CD% && python MedlarTV\tools\twitch_listener.py"
+timeout /t 3 /nobreak >nul
 echo [OK] Twitch Listener started
 echo.
 
+color 0A
 echo ================================================================
 echo.
 echo    MedlarTV Systems Operational
 echo.
 echo ================================================================
 echo.
-echo Active Components:
-echo   - Core API
-echo   - WebSocket Bridge
-echo   - Twitch Listener
+echo Active Windows:
+echo   - Ollama Server (minimized)
+echo   - MedlarTV Core (FastAPI)
+echo   - MedlarTV Bridge (WebSocket)
+echo   - MedlarTV Twitch (Bot)
 echo.
-echo Check individual windows for component status
-echo Close this window to keep MedlarTV running
+echo Close individual windows to stop components
+echo Or run stop_medlartv.bat to stop all
+echo.
+echo This window can be closed safely
 echo.
 pause
 
