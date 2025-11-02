@@ -2054,6 +2054,13 @@ from MedlarTV.core.context import record_session_mood
 from MedlarTV.core.fuzzy_trigger import should_respond as fuzzy_should_respond, find_triggers_in_message
 from MedlarTV.avatar.bridge_client import register_channel, send_mood_update
 
+# ⭐ ADD THIS IMPORT - Content Filter
+from MedlarTV.core.content_filter import (
+    filter_message,
+    should_enable_all_caps,
+    get_safety_response
+)
+
 # --- Configure Logging ---
 logging.basicConfig(
     level=logging.INFO,
@@ -2527,18 +2534,34 @@ def listen(sock):
                     log.info("[Cooldown] Skipping reply (rate limited)")
                     continue
 
+                # ⭐ NEW: Check if user wants all caps mode
+                if should_enable_all_caps(message):
+                    log.info(f"[Filter] All caps mode activated by {username}")
+
                 # Get LLM response
                 log.info(f"[LLM] Generating response for {username}...")
                 llm_reply = get_llm_response(username, message)
                 
-                if llm_reply:
-                    # Format with mood styling
-                    formatted_reply = format_reply_with_mood(llm_reply)
-                    
-                    # Send the reply (always to main channel only)
-                    send_reply(sock, formatted_reply, msg_id if reply_parent_msg_id else None)
-                else:
+                if not llm_reply:
                     log.warning("[LLM] No response generated")
+                    continue
+
+                # ⭐ NEW: Apply content filter
+                is_safe, filtered_reply, reason = filter_message(llm_reply, username)
+                
+                if not is_safe:
+                    # Content was blocked
+                    log.warning(f"[Filter] Response blocked: {reason}")
+                    # Send a safe alternative response
+                    safe_reply = get_safety_response()
+                    send_reply(sock, safe_reply, msg_id if reply_parent_msg_id else None)
+                    continue
+
+                # Format with mood styling
+                formatted_reply = format_reply_with_mood(filtered_reply)
+                
+                # Send the filtered reply
+                send_reply(sock, formatted_reply, msg_id if reply_parent_msg_id else None)
 
             except Exception as e:
                 log.error(f"[Handler] Failed to process message: {e}")
