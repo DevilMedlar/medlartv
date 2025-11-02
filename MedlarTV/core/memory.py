@@ -65,4 +65,4 @@ def reset_memory_on_shutdown():
             yaml.safe_dump(baseline, f)
         print("🧹 Memory reset to baseline.")
     except Exception as e:
-        print(f"⚠️ Failed to reset memory: {e}")
+        print(f"Failed to reset memory: {e}")

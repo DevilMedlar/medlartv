@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 MedlarTV Launcher
 Starts all MedlarTV components in one command.
@@ -71,9 +72,16 @@ def start_component(name, command, wait_time=2):
     print(f"{Fore.CYAN}[START] {name}...{Style.RESET_ALL}")
     
     try:
-        # Set PYTHONPATH environment variable
+        # Set PYTHONPATH environment variable to current directory
         env = os.environ.copy()
         env['PYTHONPATH'] = os.getcwd()
+        
+        # Determine python command based on OS
+        python_cmd = "python" if sys.platform == "win32" else "python3"
+        
+        # Replace python3 with appropriate command
+        if command.startswith("python3"):
+            command = command.replace("python3", python_cmd, 1)
         
         # Start process with updated environment
         process = subprocess.Popen(
@@ -83,7 +91,8 @@ def start_component(name, command, wait_time=2):
             stderr=subprocess.PIPE,
             text=True,
             bufsize=1,
-            env=env  
+            env=env,
+            cwd=os.getcwd()  # Ensure we're in the right directory
         )
         
         processes.append({
@@ -99,7 +108,11 @@ def start_component(name, command, wait_time=2):
             print(f"{Fore.GREEN}[OK] {name} running (PID: {process.pid}){Style.RESET_ALL}")
             return True
         else:
+            # Process failed, try to get error output
+            stdout, stderr = process.communicate(timeout=1)
             print(f"{Fore.RED}[FAIL] {name} failed to start{Style.RESET_ALL}")
+            if stderr:
+                print(f"{Fore.RED}Error: {stderr[:200]}{Style.RESET_ALL}")
             return False
             
     except Exception as e:
@@ -120,7 +133,6 @@ def monitor_processes():
     
     print(f"\n{Fore.CYAN}Commands:{Style.RESET_ALL}")
     print(f"  {Fore.GREEN}Ctrl+C{Style.RESET_ALL} - Shutdown all systems")
-    print(f"  {Fore.GREEN}s{Style.RESET_ALL}      - Show status")
     print(f"\n{Fore.YELLOW}Press Ctrl+C to shutdown...{Style.RESET_ALL}\n")
 
 
@@ -162,6 +174,9 @@ def signal_handler(signum, frame):
 
 def start_all_components():
     """Start all MedlarTV components in order."""
+    # Determine the correct python command
+    python_cmd = "python" if sys.platform == "win32" else "python3"
+    
     components = [
         {
             "name": "Ollama Server",
@@ -170,17 +185,17 @@ def start_all_components():
         },
         {
             "name": "Core API (FastAPI)",
-            "command": "python3 medlartv/MedlarTV/core/main.py",
-            "wait": 3
+            "command": f"{python_cmd} MedlarTV/core/main.py",
+            "wait": 4
         },
         {
             "name": "WebSocket Bridge",
-            "command": "python3 medlartv/MedlarTV/avatar/bridge.py",
+            "command": f"{python_cmd} MedlarTV/avatar/bridge.py",
             "wait": 2
         },
         {
             "name": "Twitch Listener",
-            "command": "python3 medlartv/MedlarTV/tools/twitch_listener.py",
+            "command": f"{python_cmd} MedlarTV/tools/twitch_listener.py",
             "wait": 2
         }
     ]
@@ -198,33 +213,6 @@ def start_all_components():
     return success_count == len(components)
 
 
-def show_logs():
-    """Display recent logs from all components."""
-    print(f"\n{Fore.CYAN}{'='*60}{Style.RESET_ALL}")
-    print(f"{Fore.CYAN}Recent Component Logs{Style.RESET_ALL}")
-    print(f"{Fore.CYAN}{'='*60}{Style.RESET_ALL}\n")
-    
-    for proc_info in processes:
-        name = proc_info["name"]
-        process = proc_info["process"]
-        
-        print(f"{Fore.YELLOW}[{name}]{Style.RESET_ALL}")
-        
-        if process.poll() is None:
-            # Try to read recent output (non-blocking)
-            try:
-                output = process.stdout.readline()
-                if output:
-                    print(f"  {output.strip()}")
-                else:
-                    print(f"  {Fore.GREEN}Running (no recent output){Style.RESET_ALL}")
-            except:
-                print(f"  {Fore.GREEN}Running{Style.RESET_ALL}")
-        else:
-            print(f"  {Fore.RED}Process stopped{Style.RESET_ALL}")
-        print()
-
-
 def main():
     """Main launcher function."""
     # Register signal handler for Ctrl+C
@@ -236,7 +224,7 @@ def main():
     # Check requirements
     if not check_requirements():
         print(f"\n{Fore.RED}[ABORT] System check failed. Cannot start MedlarTV.{Style.RESET_ALL}\n")
-        print(f"{Fore.YELLOW}Run: python3 verify_setup.py{Style.RESET_ALL}")
+        print(f"{Fore.YELLOW}Run: python verify_setup.py{Style.RESET_ALL}")
         sys.exit(1)
     
     # Start all components

@@ -26,13 +26,13 @@ def print_header(text):
     print(f"{Colors.BOLD}{Colors.CYAN}{'='*60}{Colors.RESET}\n")
 
 def print_success(text):
-    print(f"{Colors.GREEN}✅ {text}{Colors.RESET}")
+    print(f"{Colors.GREEN} {text}{Colors.RESET}")
 
 def print_warning(text):
-    print(f"{Colors.YELLOW}⚠️  {text}{Colors.RESET}")
+    print(f"{Colors.YELLOW} {text}{Colors.RESET}")
 
 def print_error(text):
-    print(f"{Colors.RED}❌ {text}{Colors.RESET}")
+    print(f"{Colors.RED} {text}{Colors.RESET}")
 
 def print_info(text):
     print(f"{Colors.BLUE}ℹ️  {text}{Colors.RESET}")
@@ -334,14 +334,14 @@ def run_all_checks():
     print(f"\n{Colors.BOLD}Results: {passed}/{total} checks passed{Colors.RESET}\n")
     
     if passed == total:
-        print_success("🎉 All checks passed! MedlarTV is ready to run!")
+        print_success("All checks passed! MedlarTV is ready to run!")
         print_info("\nTo start MedlarTV:")
         print_info("  1. Terminal 1: python MedlarTV/core/main.py")
         print_info("  2. Terminal 2: python MedlarTV/avatar/bridge.py")
         print_info("  3. Terminal 3: python MedlarTV/tools/twitch_listener.py")
         return True
     else:
-        print_warning(f"⚠️  {total - passed} check(s) failed. Fix issues above before running.")
+        print_warning(f"{total - passed} check(s) failed. Fix issues above before running.")
         return False
 
 if __name__ == "__main__":

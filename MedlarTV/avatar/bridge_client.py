@@ -15,29 +15,29 @@ def start_bridge_loop():
     while True:
         try:
             with connect(BRIDGE_URL) as ws:
-                print("[Bridge] 🔗 Connected to MedlarTV Core!")
+                print("[Bridge] Connected to MedlarTV Core!")
                 ws.send(json.dumps({"event": "register", "platform": "twitch", "channel": "MedlarTV"}))
 
                 while True:
                     try:
                         msg = ws.recv()
                         if msg:
-                            print(f"[Bridge] 💬 {msg}")
+                            print(f"[Bridge] {msg}")
                     except ConnectionClosed:
-                        print("[Bridge] ⚠️ Connection closed by server. Reconnecting...")
+                        print("[Bridge] Connection closed by server. Reconnecting...")
                         break
                     except Exception as e:
-                        print(f"[Bridge] ⚠️ Error receiving message: {e}")
+                        print(f"[Bridge] Error receiving message: {e}")
                         traceback.print_exc()
                         break
 
         except (ConnectionRefusedError, WebSocketException) as e:
-            print(f"[Bridge] ❌ Connection failed: {e}")
+            print(f"[Bridge] Connection failed: {e}")
         except Exception as e:
-            print(f"[Bridge] 🧨 Unexpected error: {e}")
+            print(f"[Bridge] Unexpected error: {e}")
             traceback.print_exc()
 
-        print(f"[Bridge] ⏳ Retrying connection in {RECONNECT_DELAY}s...")
+        print(f"[Bridge] Retrying connection in {RECONNECT_DELAY}s...")
         time.sleep(RECONNECT_DELAY)
 
 
@@ -47,7 +47,7 @@ def ws_send(payload: dict):
         with connect(BRIDGE_URL) as ws:
             ws.send(json.dumps(payload))
     except Exception as e:
-        print(f"[BridgeClient] ⚠️ send failed: {e}")
+        print(f"[BridgeClient] send failed: {e}")
 
 
 def register_channel(channel: str, platform: str = "twitch"):

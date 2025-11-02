@@ -109,7 +109,7 @@ def add_to_history(role: str, content: str):
 def clear_history():
     """Clear conversation history for a fresh start."""
     conversation_history.clear()
-    print("[MedlarTV Brain] 🧠 Conversation history cleared")
+    print("[MedlarTV Brain] Conversation history cleared")
 
 
 def _ollama_chat(system: str, user: str, history: List[Dict]) -> str:
@@ -149,15 +149,15 @@ def _ollama_chat(system: str, user: str, history: List[Dict]) -> str:
             if text:
                 return text.strip()
         except Exception as e:
-            print(f"[MedlarTV Brain] ⚠️ Ollama attempt {attempt+1} failed: {e}")
+            print(f"[MedlarTV Brain] Ollama attempt {attempt+1} failed: {e}")
             time.sleep(1)
-    return "⚠️ System instability detected. Retrying core link..."
+    return "System instability detected. Retrying core link..."
 
 
 def generate_response(user_message: str, username: str = "Pilot") -> str:
     """Generate response with context, mood, and personality."""
     if not check_ollama_health():
-        return "⚠️ Ollama model server offline or unreachable."
+        return "Ollama model server offline or unreachable."
 
     system_prompt = get_system_prompt()
 
@@ -165,7 +165,7 @@ def generate_response(user_message: str, username: str = "Pilot") -> str:
     reply = _ollama_chat(system_prompt, user_message, conversation_history)
     add_to_history("assistant", reply)
 
-    print(f"[MedlarTV Brain] 💬 {username}: {user_message}")
-    print(f"[MedlarTV Brain] 🤖 {reply}")
+    print(f"[MedlarTV Brain] {username}: {user_message}")
+    print(f"[MedlarTV Brain] {reply}")
 
     return reply

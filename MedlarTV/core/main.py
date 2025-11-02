@@ -43,7 +43,7 @@ def chat(data: dict = Body(...)):
     sender = data.get("sender", "Pilot")  # default if none provided
     reply = generate_response(prompt, sender)
 
-    # 🧠 Fallback safeguard:
+    # Fallback safeguard:
     # Automatically @tag users if missing — but skip Pilot and Co-Pilots
     if (
         "{user}" not in reply
@@ -60,5 +60,5 @@ atexit.register(reset_memory_on_shutdown)
 
 if __name__ == "__main__":
     import uvicorn
-    print("🚀 Launching MedlarTV Core on http://127.0.0.1:8000")
+    print("Launching MedlarTV Core on http://127.0.0.1:8000")
     uvicorn.run("MedlarTV.core.main:app", host="127.0.0.1", port=8000, reload=True)

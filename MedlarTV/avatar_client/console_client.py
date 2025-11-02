@@ -14,17 +14,17 @@ MOOD_COLORS = {
 }
 
 MOOD_ANIMATIONS = {
-    "hype": "💥 *pumps fist in the air* LET'S GOOOO!!!",
-    "chill": "😌 *leans back, calm and steady* just vibin'...",
-    "snarky": "😏 *rolls eyes, smirking slightly* lol sure",
-    "supportive": "🌟 *offers a warm nod and a smile* You got this!"
+    "hype": "*pumps fist in the air* LET'S GOOOO!!!",
+    "chill": "*leans back, calm and steady* just vibin'...",
+    "snarky": "*rolls eyes, smirking slightly* lol sure",
+    "supportive": "*offers a warm nod and a smile* You got this!"
 }
 
 
 async def listen():
     uri = "ws://localhost:8765"
     print(Fore.GREEN + "[MedlarTV] Connecting to Avatar Bridge...")
-    print(Fore.GREEN + "[MedlarTV] 'Processing data at light speed. Calculating emotion vectors.' ⚡")
+    print(Fore.GREEN + "[MedlarTV] 'Processing data at light speed. Calculating emotion vectors.'")
 
     async with websockets.connect(uri) as ws:
         print(Fore.GREEN + "[MedlarTV] Connected to bridge, all systems operational...")
@@ -35,7 +35,7 @@ async def listen():
                 data = json.loads(msg)
 
                 if data.get("event") == "handshake":
-                    print(Fore.GREEN + "[MedlarTV] ✅ Handshake confirmed")
+                    print(Fore.GREEN + "[MedlarTV] Handshake confirmed")
 
                 elif data.get("event") == "mood_update":
                     mood = data.get("mood")
@@ -43,7 +43,7 @@ async def listen():
                     timestamp = time.strftime('%H:%M:%S')
 
                     print("\n" + "=" * 60)
-                    print(color + f"[{timestamp}] 🧠 MedlarTV MODE SHIFT → {mood.upper()}")
+                    print(color + f"[{timestamp}] MedlarTV MODE SHIFT → {mood.upper()}")
                     print(color + MOOD_ANIMATIONS.get(mood, ""))
                     print("=" * 60 + "\n")
 

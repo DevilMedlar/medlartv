@@ -29,7 +29,7 @@ NICK = os.getenv("TWITCH_NICK")
 CHANNEL = os.getenv("TWITCH_CHANNEL")
 
 if not all([TOKEN, NICK, CHANNEL]):
-    raise EnvironmentError("❌ Missing TWITCH_TOKEN, TWITCH_NICK, or TWITCH_CHANNEL in .env")
+    raise EnvironmentError("Missing TWITCH_TOKEN, TWITCH_NICK, or TWITCH_CHANNEL in .env")
 
 # --- Constants ---
 CORE_URL = os.getenv("CORE_URL", "http://127.0.0.1:8000")
@@ -70,7 +70,7 @@ def load_copilots():
     
     active = data.get("copilots", {}).get("active", [])
     CO_PILOTS = {entry["username"].lower() for entry in active}
-    log.info(f"📋 Loaded {len(CO_PILOTS)} co-pilots: {', '.join(CO_PILOTS) if CO_PILOTS else 'none'}")
+    log.info(f"Loaded {len(CO_PILOTS)} co-pilots: {', '.join(CO_PILOTS) if CO_PILOTS else 'none'}")
 
 
 def save_copilots():
@@ -98,7 +98,7 @@ def add_copilot(username: str) -> bool:
         return False
     CO_PILOTS.add(username)
     save_copilots()
-    log.info(f"✅ Co-Pilot added: {username}")
+    log.info(f"Co-Pilot added: {username}")
     return True
 
 
@@ -109,7 +109,7 @@ def remove_copilot(username: str) -> bool:
         return False
     CO_PILOTS.remove(username)
     save_copilots()
-    log.info(f"❌ Co-Pilot removed: {username}")
+    log.info(f"Co-Pilot removed: {username}")
     return True
 
 
@@ -185,7 +185,7 @@ def switch_mood(new_mood, auto=False):
     if new_mood == current_mood:
         return
     current_mood = new_mood
-    prefix = "🌡️ Auto" if auto else "🎭"
+    prefix = "Auto" if auto else "manual"
     log.info(f"{prefix} mood switched to: {new_mood}")
     record_mood(new_mood)
     record_session_mood(new_mood)
@@ -223,7 +223,7 @@ def handle_command(sock, username, message, msg_id=None):
     # Check if command requires pilot permission
     if cmd_config.get("requires_pilot", False):
         if get_user_role(username) != "pilot":
-            send_reply(sock, f"@{username} ⛔ This command is restricted to Pilot only.", msg_id)
+            send_reply(sock, f"@{username} This command is restricted to Pilot only.", msg_id)
             return True
     
     response = cmd_config.get("response", "")
@@ -370,13 +370,13 @@ def connect():
 
     # Join main channel (Pilot's channel)
     sock.send(f"JOIN {CHANNEL}\r\n".encode("utf-8"))
-    log.info(f"🟢 Connected to {CHANNEL} as {NICK} (Pilot: {PILOT})")
+    log.info(f"Connected to {CHANNEL} as {NICK} (Pilot: {PILOT})")
 
     # Join all co-pilot channels
     for copilot in CO_PILOTS:
         copilot_channel = f"#{copilot}"
         sock.send(f"JOIN {copilot_channel}\r\n".encode("utf-8"))
-        log.info(f"🔗 Joined Co-Pilot channel: {copilot_channel}")
+        log.info(f"Joined Co-Pilot channel: {copilot_channel}")
 
     # Register with bridge
     for attempt in range(3):
@@ -392,7 +392,7 @@ def connect():
 
 
 def listen(sock):
-    log.info("🎧 Listening for Twitch chat messages...")
+    log.info("Listening for Twitch chat messages...")
 
     ignored_users = {
         "streamelements", "streamlabs", "nightbot", "moobot",
@@ -515,7 +515,7 @@ def cleanup_and_exit(sock):
         pass
     finally:
         sock.close()
-        log.info("🛑 Connection closed cleanly")
+        log.info("Connection closed cleanly")
 
 
 # --- ENTRYPOINT ---
@@ -523,16 +523,16 @@ if __name__ == "__main__":
     try:
         load_config()
         current_mood = get_dominant_weighted_mood()
-        log.info(f"🧠 Starting with learned default mood: {current_mood}")
-        log.info(f"👤 Pilot: {PILOT}")
-        log.info(f"👥 Co-Pilots: {', '.join(CO_PILOTS) if CO_PILOTS else 'none'}")
+        log.info(f"Starting with learned default mood: {current_mood}")
+        log.info(f"Pilot: {PILOT}")
+        log.info(f"Co-Pilots: {', '.join(CO_PILOTS) if CO_PILOTS else 'none'}")
         s = connect()
         listen(s)
     except KeyboardInterrupt:
-        log.info("\n🛑 MedlarTV Twitch listener stopped manually.")
+        log.info("\n MedlarTV Twitch listener stopped manually.")
         cleanup_and_exit(s)
     except Exception as e:
-        log.error(f"💥 Fatal error: {e}")
+        log.error(f"Fatal error: {e}")
         import traceback
         traceback.print_exc()
         raise

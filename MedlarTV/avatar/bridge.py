@@ -9,7 +9,7 @@ CHANNEL_REGISTRY = {}  # track which Twitch channels are connected
 # --- Client Management ---
 async def register(websocket):
     ACTIVE_CONNECTIONS.add(websocket)
-    print(f"[Bridge] ✅ Connected ({len(ACTIVE_CONNECTIONS)})")
+    print(f"[Bridge] Connected ({len(ACTIVE_CONNECTIONS)})")
     await websocket.send(json.dumps({"event": "handshake", "msg": "connected"}))
 
 
@@ -36,7 +36,7 @@ async def broadcast(payload: dict, channel: str | None = None):
     )
 
     if not targets:
-        print(f"[Bridge] ⚠️ No targets for {channel or 'global'} broadcast. Waiting...")
+        print(f"[Bridge] No targets for {channel or 'global'} broadcast. Waiting...")
         for _ in range(5):  # wait up to ~5 seconds total
             await asyncio.sleep(1)
             targets = (
@@ -47,7 +47,7 @@ async def broadcast(payload: dict, channel: str | None = None):
             if targets:
                 break
         if not targets:
-            print(f"[Bridge] ❌ Still no targets after wait, skipping broadcast.")
+            print(f"[Bridge] Still no targets after wait, skipping broadcast.")
             return
 
     msg = json.dumps(payload)
@@ -55,9 +55,9 @@ async def broadcast(payload: dict, channel: str | None = None):
 
     try:
         await asyncio.gather(*(ws.send(msg) for ws in list(targets)))
-        print("[Bridge] ✅ Broadcast sent successfully.")
+        print("[Bridge] Broadcast sent successfully.")
     except Exception as e:
-        print(f"[Bridge] ⚠️ broadcast error: {e}")
+        print(f"[Bridge] broadcast error: {e}")
 
 
 # --- Connection Handler ---
@@ -68,7 +68,7 @@ async def handler(websocket):
             try:
                 data = json.loads(message)
             except json.JSONDecodeError:
-                print(f"[Bridge] ⚠️ Invalid JSON (truncated): {message[:120]}")
+                print(f"[Bridge] Invalid JSON (truncated): {message[:120]}")
                 continue
             
             # Handle incoming events
@@ -78,7 +78,7 @@ async def handler(websocket):
                 channel = data.get("channel", "").lower()
                 if channel:
                     CHANNEL_REGISTRY.setdefault(channel, []).append(websocket)
-                    print(f"[Bridge] 🔗 Channel registered: {channel}")
+                    print(f"[Bridge] Channel registered: {channel}")
 
             elif event == "mood_update":
                 mood = data.get("mood")
@@ -86,7 +86,7 @@ async def handler(websocket):
                 await broadcast({"event": "mood_update", "mood": mood}, channel)
 
             else:
-                print(f"[Bridge] ℹ️ Unknown event: {data}")
+                print(f"[Bridge] Unknown event: {data}")
 
     finally:
         await unregister(websocket)

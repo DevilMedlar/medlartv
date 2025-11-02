@@ -285,7 +285,7 @@ def test_fuzzy_trigger():
     
     for text, expected, description in test_cases:
         result = should_respond(text)
-        status = "✅" if result == expected else "❌"
+        status = "0" if result == expected else "1"
         
         if result == expected:
             passed += 1
