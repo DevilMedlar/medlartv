@@ -71,14 +71,19 @@ def start_component(name, command, wait_time=2):
     print(f"{Fore.CYAN}[START] {name}...{Style.RESET_ALL}")
     
     try:
-        # Start process with output redirected
+        # Set PYTHONPATH environment variable
+        env = os.environ.copy()
+        env['PYTHONPATH'] = os.getcwd()
+        
+        # Start process with updated environment
         process = subprocess.Popen(
             command,
             shell=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            bufsize=1
+            bufsize=1,
+            env=env  
         )
         
         processes.append({

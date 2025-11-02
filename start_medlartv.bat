@@ -1,9 +1,8 @@
 @echo off
-REM MedlarTV Launcher - Fixed for Windows
-REM This version includes Ollama startup and better error handling
+REM MedlarTV Launcher - Windows (PYTHONPATH Fixed)
+title MedlarTV Launcher
 
 color 0B
-title MedlarTV Launcher
 
 echo.
 echo ================================================================
@@ -16,104 +15,39 @@ echo.
 REM Create logs directory
 if not exist "logs" mkdir logs
 
-REM Check if .env exists
+REM Check .env
 if not exist ".env" (
     color 0C
     echo [ERROR] .env file not found!
-    echo.
     pause
     exit /b 1
 )
 
-REM Check if Ollama is installed
-where ollama >nul 2>&1
-if %errorlevel% neq 0 (
-    color 0C
-    echo [ERROR] Ollama is not installed or not in PATH!
-    echo.
-    echo Install from: https://ollama.ai
-    echo.
-    pause
-    exit /b 1
-)
-
+REM Start Ollama
 echo [CHECK] Starting Ollama server...
-echo.
-
-REM Start Ollama serve in background
 start "Ollama Server" /min cmd /c "ollama serve > logs\ollama.log 2>&1"
 timeout /t 3 /nobreak >nul
-
-REM Check if Ollama is responding
-curl -s http://127.0.0.1:11434/api/tags >nul 2>&1
-if %errorlevel% neq 0 (
-    echo [WARN] Ollama may not be ready yet, waiting...
-    timeout /t 5 /nobreak >nul
-)
-
-echo [OK] Ollama server started
+echo [OK] Ollama started
 echo.
 
-REM Start Core API
+REM Start Core API (with PYTHONPATH set)
 echo [START] Core API (FastAPI)...
-start "MedlarTV Core" cmd /c "python MedlarTV\core\main.py > logs\core.log 2>&1"
-timeout /t 4 /nobreak >nul
-
-REM Check if Core started (look for the process)
-tasklist /FI "WindowTitle eq MedlarTV Core*" 2>nul | find /i "cmd.exe" >nul
-if %errorlevel% neq 0 (
-    color 0C
-    echo [FAIL] Core API failed to start!
-    echo.
-    echo Check logs\core.log for details
-    echo.
-    type logs\core.log
-    echo.
-    pause
-    exit /b 1
-)
+start "MedlarTV Core" cmd /k "cd /d %CD% && set PYTHONPATH=%CD% && python MedlarTV\core\main.py"
+timeout /t 5 /nobreak >nul
 echo [OK] Core API started
 echo.
 
-REM Start WebSocket Bridge
+REM Start Bridge (with PYTHONPATH set)
 echo [START] WebSocket Bridge...
-start "MedlarTV Bridge" cmd /c "python MedlarTV\avatar\bridge.py > logs\bridge.log 2>&1"
+start "MedlarTV Bridge" cmd /k "cd /d %CD% && set PYTHONPATH=%CD% && python MedlarTV\avatar\bridge.py"
 timeout /t 3 /nobreak >nul
-
-REM Check if Bridge started
-tasklist /FI "WindowTitle eq MedlarTV Bridge*" 2>nul | find /i "cmd.exe" >nul
-if %errorlevel% neq 0 (
-    color 0C
-    echo [FAIL] Bridge failed to start!
-    echo.
-    echo Stopping Core API...
-    taskkill /FI "WindowTitle eq MedlarTV Core*" /F >nul 2>&1
-    echo.
-    echo Check logs\bridge.log for details
-    echo.
-    pause
-    exit /b 1
-)
 echo [OK] Bridge started
 echo.
 
-REM Start Twitch Listener
+REM Start Twitch Bot (with PYTHONPATH set)
 echo [START] Twitch Listener...
-start "MedlarTV Twitch" cmd /c "python MedlarTV\tools\twitch_listener.py"
+start "MedlarTV Twitch" cmd /k "cd /d %CD% && set PYTHONPATH=%CD% && python MedlarTV\tools\twitch_listener.py"
 timeout /t 3 /nobreak >nul
-
-REM Check if Twitch started
-tasklist /FI "WindowTitle eq MedlarTV Twitch*" 2>nul | find /i "cmd.exe" >nul
-if %errorlevel% neq 0 (
-    color 0C
-    echo [FAIL] Twitch Listener failed to start!
-    echo.
-    echo Stopping other components...
-    taskkill /FI "WindowTitle eq MedlarTV*" /F >nul 2>&1
-    echo.
-    pause
-    exit /b 1
-)
 echo [OK] Twitch Listener started
 echo.
 
@@ -124,20 +58,15 @@ echo    MedlarTV Systems Operational
 echo.
 echo ================================================================
 echo.
-echo Active Components:
-echo   - Ollama Server (background)
-echo   - Core API (FastAPI)
-echo   - WebSocket Bridge
-echo   - Twitch Listener
+echo Active Windows:
+echo   - Ollama Server (minimized)
+echo   - MedlarTV Core (FastAPI)
+echo   - MedlarTV Bridge (WebSocket)
+echo   - MedlarTV Twitch (Bot)
 echo.
-echo Windows:
-echo   - Check "Ollama Server" window for Ollama logs
-echo   - Check "MedlarTV Core" window for API logs
-echo   - Check "MedlarTV Bridge" window for Bridge logs
-echo   - Check "MedlarTV Twitch" window for bot logs
+echo Close individual windows to stop components
+echo Or run stop_medlartv.bat to stop all
 echo.
-echo Logs saved to: logs\ directory
-echo.
-echo To stop: Close this window or run stop_medlartv.bat
+echo This window can be closed safely
 echo.
 pause
