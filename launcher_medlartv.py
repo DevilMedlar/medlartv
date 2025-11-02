@@ -84,15 +84,12 @@ def start_component(name, command, wait_time=2):
             command = command.replace("python3", python_cmd, 1)
         
         # Start process with updated environment
+        # IMPORTANT: Don't suppress output - let it show in console
         process = subprocess.Popen(
             command,
             shell=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            bufsize=1,
             env=env,
-            cwd=os.getcwd()  # Ensure we're in the right directory
+            cwd=os.getcwd()
         )
         
         processes.append({
@@ -108,11 +105,7 @@ def start_component(name, command, wait_time=2):
             print(f"{Fore.GREEN}[OK] {name} running (PID: {process.pid}){Style.RESET_ALL}")
             return True
         else:
-            # Process failed, try to get error output
-            stdout, stderr = process.communicate(timeout=1)
             print(f"{Fore.RED}[FAIL] {name} failed to start{Style.RESET_ALL}")
-            if stderr:
-                print(f"{Fore.RED}Error: {stderr[:200]}{Style.RESET_ALL}")
             return False
             
     except Exception as e:
