@@ -164,18 +164,23 @@ def start_all_components():
     """Start all MedlarTV components in order."""
     components = [
         {
+            "name": "Ollama Server",
+            "command": "ollama serve",
+            "wait": 3
+        },
+        {
             "name": "Core API (FastAPI)",
-            "command": "python3 MedlarTV/core/main.py",
+            "command": "python3 medlartv/MedlarTV/core/main.py",
             "wait": 3
         },
         {
             "name": "WebSocket Bridge",
-            "command": "python3 MedlarTV/avatar/bridge.py",
+            "command": "python3 medlartv/MedlarTV/avatar/bridge.py",
             "wait": 2
         },
         {
             "name": "Twitch Listener",
-            "command": "python3 MedlarTV/tools/twitch_listener.py",
+            "command": "python3 medlartv/MedlarTV/tools/twitch_listener.py",
             "wait": 2
         }
     ]
