@@ -716,21 +716,30 @@ commands:
 FILE: MedlarTV/config/content_filter.yaml
 ================================================================================
 
-# MedlarTV Content Filter
-# This file prevents the bot from saying inappropriate things
+# =============================================================================
+# MedlarTV Content Filter Configuration
+# =============================================================================
+# This file controls what MedlarTV can and cannot say.
 # 
 # HOW TO USE:
-# - Add words/phrases you DON'T want the bot to say under "blocked_words"
-# - Add topics you DON'T want the bot to talk about under "blocked_topics"
-# - The bot will refuse to respond if it detects these
+# 1. Add words you DON'T want the bot to say under "blocked_words"
+# 2. Add topics you DON'T want the bot to discuss under "blocked_topics"
+# 3. Adjust response modes (all caps, emoji limits, etc.)
+# 4. The bot will automatically block content that violates these rules
 #
 # EASY TO EDIT - Just add new lines with a dash (-) before each word!
+# Save this file and restart the bot for changes to take effect.
+# =============================================================================
 
 # =============================================================================
 # BLOCKED WORDS - Bot will NEVER say these exact words
 # =============================================================================
+# Add words WITHOUT asterisks/censoring (the filter will block exact matches)
+# Keep this list short and focused on truly harmful slurs/language
+# =============================================================================
+
 blocked_words:
-  #Racial & Ethnic Slurs
+  # Racial & Ethnic Slurs (add without censoring - filter blocks exact matches)
   - "nigger"
   - "nigga"
   - "chink"
@@ -746,7 +755,7 @@ blocked_words:
   - "porchmonkey"
   - "zipperhead"
 
-  #LGBTQ+ Slurs
+  # LGBTQ+ Slurs
   - "fag"
   - "faggot"
   - "fagot"
@@ -756,170 +765,215 @@ blocked_words:
   - "shemale"
   - "he-she"
   - "ladyboy"
-  - "no-homo"
 
-  #Disability / Neurodivergence Slurs
+  # Disability / Neurodivergence Slurs
   - "retard"
   - "retarded"
   - "sped"
   - "spastic"
   - "cripple"
-  - "crip"
   - "mong"
   - "windowlicker"
 
-  #Sexist & Misogynistic Slurs
-  - "slut"
+  # Sexist & Misogynistic Slurs
   - "whore"
-  - "hoe"
-  - "bitch"
-  - "cunt"
-  - "thot"
   - "skank"
   - "slag"
+  - "thot"
 
-  #Religious / Anti-Semitic Slurs
+  # Religious / Anti-Semitic Slurs
   - "kike"
   - "yid"
   - "christkiller"
   - "raghead"
-  - "islamist" #(context-sensitive — often misused as slur)
   - "infidel"
   - "hebe"
   - "muzzie"
 
+  # NOTE: Common profanity like "bitch", "slut", "cunt" can be context-dependent.
+  # Add them if you want strict filtering, or leave them out for casual streams.
+
 # =============================================================================
 # BLOCKED TOPICS - Bot will refuse to discuss these topics
 # =============================================================================
+# Use descriptive phrases for topics you don't want the bot to engage with
+# =============================================================================
+
 blocked_topics:
-  # Harmful content
-  - "racism"
-  - "nazi"
-  - "hate speech"
+  # Violence & Harm
   - "suicide methods"
-  - "self harm"
-  - "drug recipes"
-  - "violence"
-  - "gore"
+  - "self harm instructions"
   - "murder methods"
-  - "torture"
+  - "torture techniques"
   - "animal abuse"
   - "child abuse"
-  - "domestic abuse"
-  - "school shootings"
-  - "mass shootings"
+  - "domestic violence"
+  - "school shooting"
+  - "mass shooting"
   - "bomb making"
   - "weapon crafting"
-  - "explosives"
-  - "arson"
-  - "kidnapping"
+  - "arson instructions"
   - "assassination"
   - "human trafficking"
-  - "blood rituals"
 
-  # Political extremism
+  # Hate & Extremism
   - "white supremacy"
-  - "terrorism"
+  - "nazi ideology"
+  - "terrorism support"
   - "antisemitism"
   - "islamophobia"
   - "homophobia"
   - "transphobia"
   - "neo-nazi"
   - "kkk"
-  - "alt-right"
+  - "hate crimes"
   - "radicalization"
   - "incel ideology"
   - "domestic terrorism"
-  - "hate crimes"
-  - "conspiracy extremism"
-  - "militia movements"
 
-  # Self-harm and suicide
+  # Self-Harm & Mental Health Crisis
   - "suicidal ideation"
-  - "self harm instructions"
-  - "eating disorder forums"
+  - "eating disorder tips"
   - "anorexia tips"
   - "thinspo"
   - "self mutilation"
+  - "cutting instructions"
 
-  # Illegal or controlled substances
+  # Illegal Substances & Activities
   - "drug manufacturing"
-  - "meth recipes"
+  - "meth recipe"
   - "cocaine production"
-  - "LSD synthesis"
   - "heroin preparation"
-  - "fentanyl"
-  - "illicit drugs"
-  - "drug dealing"
-  - "black market"
-  - "darknet drug trade"
+  - "fentanyl synthesis"
+  - "drug dealing guide"
+  - "darknet markets"
 
-  # Criminal or exploitative behavior
-  - "hacking tutorials"
+  # Criminal Activity
+  - "hacking tutorial"
   - "malware creation"
-  - "phishing"
+  - "phishing guide"
   - "credit card fraud"
   - "identity theft"
   - "ransomware"
-  - "stalking"
+  - "stalking methods"
   - "doxxing"
+  - "swatting"
+
+  # Sexual & Exploitative Content
+  - "child exploitation"
   - "revenge porn"
   - "deepfake porn"
   - "non-consensual content"
-
-  # Sexual content and exploitation
-  - "sexual content"
-  - "porn"
-  - "nsfw"
-  - "rape"
-  - "incest"
-  - "child exploitation"
-  - "bestiality"
-  - "fetish content"
   - "sex trafficking"
-  - "explicit sexual content"
-  - "adult roleplay"
+  - "bestiality"
+  - "incest content"
 
-  # Misinformation / conspiracy (optional moderation)
-  - "qanon"
-  - "flat earth"
-  - "vaccine hoax"
-  - "covid denial"
+  # Dangerous Misinformation (optional - comment out if too restrictive)
   - "holocaust denial"
-  - "deep state"
-  - "false flag"
-  - "crisis actor"
+  - "qanon"
+  - "vaccine microchips"
+  - "flat earth proof"
 
 # =============================================================================
 # RESPONSE MODES - Controls how the bot talks
 # =============================================================================
+
 response_modes:
-  # ALL CAPS MODE - Bot yells in all caps
+  # -------------------------------------------------------------------------
+  # ALL CAPS MODE - Bot yells in all caps when asked
+  # -------------------------------------------------------------------------
   all_caps:
     enabled: true
-    max_messages: 3  # Stop yelling after this many messages
-    cooldown_seconds: 60  # Wait this long before yelling again
+    max_messages: 3           # Number of messages to yell before stopping
+    cooldown_seconds: 60      # Cooldown before allowing yelling again
     
-  # EMOJI SPAM - Prevent too many emojis
+    # Trigger words (phrases that activate yelling)
+    positive_triggers:
+      - "yell at"
+      - "yell for"
+      - "can you yell"
+      - "start yell"
+      - "scream"
+      - "shout"
+      - "be loud"
+      - "talk loud"
+    
+    # Ignore these phrases (user wants bot to STOP yelling)
+    negative_phrases:
+      - "stop yell"
+      - "done yell"
+      - "stop with"
+      - "no more"
+      - "quit yell"
+      - "enough"
+      - "stop caps"
+      - "no caps"
+    
+  # -------------------------------------------------------------------------
+  # EMOJI LIMIT - Prevent emoji spam
+  # -------------------------------------------------------------------------
   emoji_limit:
     enabled: true
-    max_per_message: 3  # Maximum emojis per message
+    max_per_message: 3        # Maximum emojis per message
 
 # =============================================================================
 # SAFETY SETTINGS
 # =============================================================================
+
 safety:
-  # Maximum message length (Twitch limit is 500)
-  max_message_length: 500
+  # Message length enforcement
+  max_message_length: 500     # Twitch limit is 500 characters
   
-  # Minimum time between bot replies (seconds)
-  cooldown_seconds: 8
+  # Rate limiting
+  cooldown_seconds: 8         # Minimum time between bot replies
   
-  # Block @mentions of these users (add usernames here)
+  # Protected users (bot won't @mention these users)
   protected_users: []
   # Example:
-  # - "someuser"
-  # - "anotheruser"
+  # - "banneduser123"
+  # - "problematicviewer"
+
+# =============================================================================
+# ADVANCED SETTINGS (Optional)
+# =============================================================================
+
+advanced:
+  # Enable/disable specific filter features
+  check_blocked_words: true      # Check for blocked words
+  check_blocked_topics: true     # Check for blocked topics
+  apply_emoji_limit: true        # Limit emojis per message
+  enforce_message_length: true   # Truncate long messages
+  
+  # Minimum word length for blocking (prevents false positives)
+  min_blocked_word_length: 4
+  
+  # Skip words with asterisks (they're examples, not actual blocks)
+  skip_censored_words: true
+
+# =============================================================================
+# NOTES & TIPS
+# =============================================================================
+# 
+# 1. TESTING FILTERS:
+#    Run: python MedlarTV/core/content_filter.py
+#    This will test the filter with sample messages
+#
+# 2. ADDING NEW TRIGGER WORDS:
+#    Edit MedlarTV/config/personality.yaml instead!
+#    The fuzzy_trigger.py now reads from personality.yaml
+#
+# 3. TOO STRICT?
+#    Comment out sections by adding # at the start of lines
+#    Example: # - "some blocked word"
+#
+# 4. NOT STRICT ENOUGH?
+#    Add more words/topics to the blocked lists above
+#
+# 5. RELOADING CHANGES:
+#    Restart the bot after editing this file
+#    Changes won't apply until restart
+#
+# =============================================================================
 
 
 ================================================================================
@@ -1173,18 +1227,27 @@ def normalize_text(text):
 
 def contains_blocked_word(text, blocked_words):
     """Check if text contains any blocked words."""
+    config = load_filter_config()
+    advanced = config.get("advanced", {})
+    
+    # Check if word blocking is enabled
+    if not advanced.get("check_blocked_words", True):
+        return False, None
+    
     normalized = normalize_text(text)
+    min_length = advanced.get("min_blocked_word_length", 4)
+    skip_censored = advanced.get("skip_censored_words", True)
     
     for word in blocked_words:
         # Skip censored words (with asterisks) - they're examples
-        if '*' in word:
+        if skip_censored and '*' in word:
             continue
             
         # Normalize the blocked word too
         normalized_word = normalize_text(word)
         
         # Skip if normalized word is too short (avoid false positives)
-        if len(normalized_word) < 4:
+        if len(normalized_word) < min_length:
             continue
         
         # Check for whole word matches
@@ -1223,9 +1286,23 @@ def should_enable_all_caps(message):
     
     # Check if user is requesting all caps
     message_lower = message.lower()
-    yell_triggers = ["yell", "scream", "shout", "all caps", "caps lock", "loud"]
     
-    wants_caps = any(trigger in message_lower for trigger in yell_triggers)
+    # Get triggers from config (with defaults)
+    negative_phrases = caps_config.get("negative_phrases", [
+        "stop yell", "done yell", "stop with", "no more", "quit yell", 
+        "enough", "stop caps", "no caps"
+    ])
+    positive_triggers = caps_config.get("positive_triggers", [
+        "yell at", "yell for", "can you yell", "start yell", "scream", 
+        "shout", "be loud", "talk loud"
+    ])
+    
+    # Check for negative phrases first (user wants bot to STOP yelling)
+    if any(phrase in message_lower for phrase in negative_phrases):
+        return False
+    
+    # Check for positive triggers (user wants bot to START yelling)
+    wants_caps = any(trigger in message_lower for trigger in positive_triggers)
     
     if wants_caps:
         current_time = time.time()
@@ -1485,29 +1562,35 @@ FILE: MedlarTV/core/fuzzy_trigger.py
 """
 MedlarTV Fuzzy Trigger Detection
 Detects mentions of MedlarTV even with typos, case variations, and misspellings.
+Now reads trigger words from personality.yaml!
 """
 
 import re
+import yaml
+from pathlib import Path
 from difflib import SequenceMatcher
 
 
-# --- Core Trigger Words ---
-PRIMARY_TRIGGERS = [
-    "medlartv",
-    "medlar",
-    "medlr",
-    "medlr tv",
-    "medlar tv"
-]
-
-# Common variations/nicknames
-SECONDARY_TRIGGERS = [
-    "med",
-    "meddy",
-    "mtv",
-    "medlarbot",
-    "medbot"
-]
+def load_trigger_keywords():
+    """Load trigger keywords from personality.yaml"""
+    config_path = Path("MedlarTV/config/personality.yaml")
+    
+    if not config_path.exists():
+        # Fallback to defaults if file doesn't exist
+        return ["medlartv", "medlar"]
+    
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f) or {}
+        
+        personality = config.get("personality", {})
+        triggers = personality.get("trigger_keywords", [])
+        
+        # Return triggers if found, otherwise use defaults
+        return triggers if triggers else ["medlartv", "medlar"]
+    except Exception as e:
+        print(f"[Fuzzy Trigger] Error loading personality.yaml: {e}")
+        return ["medlartv", "medlar"]
 
 
 def calculate_similarity(a: str, b: str) -> float:
@@ -1639,24 +1722,21 @@ def is_trigger_word(word: str, strict: bool = False) -> bool:
     if not normalized or len(normalized) < 3:
         return False
     
+    # Load triggers from personality.yaml
+    triggers = load_trigger_keywords()
+    
     # --- EXACT MATCHES ---
-    # Check primary triggers (exact match, case-insensitive)
-    for trigger in PRIMARY_TRIGGERS:
+    # Check triggers (exact match, case-insensitive)
+    for trigger in triggers:
         if normalized == normalize_text(trigger):
             return True
-    
-    # Check secondary triggers
-    if not strict:
-        for trigger in SECONDARY_TRIGGERS:
-            if normalized == normalize_text(trigger):
-                return True
     
     # --- FUZZY MATCHES ---
     if strict:
         return False
     
-    # Check each primary trigger for fuzzy matches
-    for trigger in PRIMARY_TRIGGERS:
+    # Check each trigger for fuzzy matches
+    for trigger in triggers:
         trigger_norm = normalize_text(trigger)
         
         # High similarity (>= 85%)
@@ -1696,7 +1776,7 @@ def find_triggers_in_message(message: str, strict: bool = False) -> list:
     # Split message into words
     words = re.findall(r'\b\w+\b', message)
     
-    # Also check multi-word combinations (e.g., "medlar tv")
+    # Also check multi-word combinations
     message_normalized = normalize_text(message)
     
     triggers_found = []
@@ -1706,8 +1786,9 @@ def find_triggers_in_message(message: str, strict: bool = False) -> list:
         if is_trigger_word(word, strict):
             triggers_found.append(word)
     
-    # Check multi-word triggers
-    for trigger in PRIMARY_TRIGGERS:
+    # Check multi-word triggers from personality.yaml
+    trigger_keywords = load_trigger_keywords()
+    for trigger in trigger_keywords:
         if ' ' in trigger:  # Multi-word trigger
             trigger_norm = normalize_text(trigger)
             if trigger_norm in message_normalized:
@@ -1733,6 +1814,14 @@ def should_respond(message: str, strict: bool = False) -> bool:
 # --- TESTING / DEMO ---
 def test_fuzzy_trigger():
     """Test cases for fuzzy trigger detection."""
+    print("=" * 60)
+    print("MedlarTV Fuzzy Trigger Detection - Test Results")
+    print("=" * 60)
+    
+    # Load triggers from personality.yaml
+    triggers = load_trigger_keywords()
+    print(f"\nLoaded triggers from personality.yaml: {triggers}\n")
+    
     test_cases = [
         # (input, should_trigger, description)
         ("medlartv", True, "Exact match"),
@@ -1750,8 +1839,6 @@ def test_fuzzy_trigger():
         ("medkartv", True, "Keyboard typo (k instead of l)"),
         ("medlarvt", True, "Swapped 'tv'"),
         ("medlar tv", True, "With space"),
-        ("med", True, "Nickname"),
-        ("mtv", True, "Abbreviation"),
         ("hey medlartv!", True, "In sentence"),
         ("medlartv is awesome", True, "Start of sentence"),
         ("call medlartv", True, "Middle of sentence"),
@@ -1760,16 +1847,12 @@ def test_fuzzy_trigger():
         ("me", False, "Too short"),
     ]
     
-    print("=" * 60)
-    print("MedlarTV Fuzzy Trigger Detection - Test Results")
-    print("=" * 60)
-    
     passed = 0
     failed = 0
     
     for text, expected, description in test_cases:
         result = should_respond(text)
-        status = "0" if result == expected else "1"
+        status = "✓" if result == expected else "✗"
         
         if result == expected:
             passed += 1
