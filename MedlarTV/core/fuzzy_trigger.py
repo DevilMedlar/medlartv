@@ -1,29 +1,35 @@
 """
 MedlarTV Fuzzy Trigger Detection
 Detects mentions of MedlarTV even with typos, case variations, and misspellings.
+Now reads trigger words from personality.yaml!
 """
 
 import re
+import yaml
+from pathlib import Path
 from difflib import SequenceMatcher
 
 
-# --- Core Trigger Words ---
-PRIMARY_TRIGGERS = [
-    "medlartv",
-    "medlar",
-    "medlr",
-    "medlr tv",
-    "medlar tv"
-]
-
-# Common variations/nicknames
-SECONDARY_TRIGGERS = [
-    "med",
-    "meddy",
-    "mtv",
-    "medlarbot",
-    "medbot"
-]
+def load_trigger_keywords():
+    """Load trigger keywords from personality.yaml"""
+    config_path = Path("MedlarTV/config/personality.yaml")
+    
+    if not config_path.exists():
+        # Fallback to defaults if file doesn't exist
+        return ["medlartv", "medlar"]
+    
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f) or {}
+        
+        personality = config.get("personality", {})
+        triggers = personality.get("trigger_keywords", [])
+        
+        # Return triggers if found, otherwise use defaults
+        return triggers if triggers else ["medlartv", "medlar"]
+    except Exception as e:
+        print(f"[Fuzzy Trigger] Error loading personality.yaml: {e}")
+        return ["medlartv", "medlar"]
 
 
 def calculate_similarity(a: str, b: str) -> float:
@@ -155,24 +161,21 @@ def is_trigger_word(word: str, strict: bool = False) -> bool:
     if not normalized or len(normalized) < 3:
         return False
     
+    # Load triggers from personality.yaml
+    triggers = load_trigger_keywords()
+    
     # --- EXACT MATCHES ---
-    # Check primary triggers (exact match, case-insensitive)
-    for trigger in PRIMARY_TRIGGERS:
+    # Check triggers (exact match, case-insensitive)
+    for trigger in triggers:
         if normalized == normalize_text(trigger):
             return True
-    
-    # Check secondary triggers
-    if not strict:
-        for trigger in SECONDARY_TRIGGERS:
-            if normalized == normalize_text(trigger):
-                return True
     
     # --- FUZZY MATCHES ---
     if strict:
         return False
     
-    # Check each primary trigger for fuzzy matches
-    for trigger in PRIMARY_TRIGGERS:
+    # Check each trigger for fuzzy matches
+    for trigger in triggers:
         trigger_norm = normalize_text(trigger)
         
         # High similarity (>= 85%)
@@ -212,7 +215,7 @@ def find_triggers_in_message(message: str, strict: bool = False) -> list:
     # Split message into words
     words = re.findall(r'\b\w+\b', message)
     
-    # Also check multi-word combinations (e.g., "medlar tv")
+    # Also check multi-word combinations
     message_normalized = normalize_text(message)
     
     triggers_found = []
@@ -222,8 +225,9 @@ def find_triggers_in_message(message: str, strict: bool = False) -> list:
         if is_trigger_word(word, strict):
             triggers_found.append(word)
     
-    # Check multi-word triggers
-    for trigger in PRIMARY_TRIGGERS:
+    # Check multi-word triggers from personality.yaml
+    trigger_keywords = load_trigger_keywords()
+    for trigger in trigger_keywords:
         if ' ' in trigger:  # Multi-word trigger
             trigger_norm = normalize_text(trigger)
             if trigger_norm in message_normalized:
@@ -249,6 +253,14 @@ def should_respond(message: str, strict: bool = False) -> bool:
 # --- TESTING / DEMO ---
 def test_fuzzy_trigger():
     """Test cases for fuzzy trigger detection."""
+    print("=" * 60)
+    print("MedlarTV Fuzzy Trigger Detection - Test Results")
+    print("=" * 60)
+    
+    # Load triggers from personality.yaml
+    triggers = load_trigger_keywords()
+    print(f"\nLoaded triggers from personality.yaml: {triggers}\n")
+    
     test_cases = [
         # (input, should_trigger, description)
         ("medlartv", True, "Exact match"),
@@ -266,8 +278,6 @@ def test_fuzzy_trigger():
         ("medkartv", True, "Keyboard typo (k instead of l)"),
         ("medlarvt", True, "Swapped 'tv'"),
         ("medlar tv", True, "With space"),
-        ("med", True, "Nickname"),
-        ("mtv", True, "Abbreviation"),
         ("hey medlartv!", True, "In sentence"),
         ("medlartv is awesome", True, "Start of sentence"),
         ("call medlartv", True, "Middle of sentence"),
@@ -276,16 +286,12 @@ def test_fuzzy_trigger():
         ("me", False, "Too short"),
     ]
     
-    print("=" * 60)
-    print("MedlarTV Fuzzy Trigger Detection - Test Results")
-    print("=" * 60)
-    
     passed = 0
     failed = 0
     
     for text, expected, description in test_cases:
         result = should_respond(text)
-        status = "0" if result == expected else "1"
+        status = "✓" if result == expected else "✗"
         
         if result == expected:
             passed += 1

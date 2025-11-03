@@ -56,18 +56,27 @@ def normalize_text(text):
 
 def contains_blocked_word(text, blocked_words):
     """Check if text contains any blocked words."""
+    config = load_filter_config()
+    advanced = config.get("advanced", {})
+    
+    # Check if word blocking is enabled
+    if not advanced.get("check_blocked_words", True):
+        return False, None
+    
     normalized = normalize_text(text)
+    min_length = advanced.get("min_blocked_word_length", 4)
+    skip_censored = advanced.get("skip_censored_words", True)
     
     for word in blocked_words:
         # Skip censored words (with asterisks) - they're examples
-        if '*' in word:
+        if skip_censored and '*' in word:
             continue
             
         # Normalize the blocked word too
         normalized_word = normalize_text(word)
         
         # Skip if normalized word is too short (avoid false positives)
-        if len(normalized_word) < 4:
+        if len(normalized_word) < min_length:
             continue
         
         # Check for whole word matches
@@ -106,9 +115,23 @@ def should_enable_all_caps(message):
     
     # Check if user is requesting all caps
     message_lower = message.lower()
-    yell_triggers = ["yell", "scream", "shout", "all caps", "caps lock", "loud"]
     
-    wants_caps = any(trigger in message_lower for trigger in yell_triggers)
+    # Get triggers from config (with defaults)
+    negative_phrases = caps_config.get("negative_phrases", [
+        "stop yell", "done yell", "stop with", "no more", "quit yell", 
+        "enough", "stop caps", "no caps"
+    ])
+    positive_triggers = caps_config.get("positive_triggers", [
+        "yell at", "yell for", "can you yell", "start yell", "scream", 
+        "shout", "be loud", "talk loud"
+    ])
+    
+    # Check for negative phrases first (user wants bot to STOP yelling)
+    if any(phrase in message_lower for phrase in negative_phrases):
+        return False
+    
+    # Check for positive triggers (user wants bot to START yelling)
+    wants_caps = any(trigger in message_lower for trigger in positive_triggers)
     
     if wants_caps:
         current_time = time.time()
