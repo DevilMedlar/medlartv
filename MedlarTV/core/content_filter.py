@@ -82,7 +82,7 @@ def contains_blocked_topic(text, blocked_topics):
     return False, None
 
 
-def check_all_caps_mode(message):
+def should_enable_all_caps(message):
     """Check if message wants all caps mode, and if it's allowed."""
     config = load_filter_config()
     caps_config = config.get("response_modes", {}).get("all_caps", {})
@@ -91,6 +91,10 @@ def check_all_caps_mode(message):
         return False
     
     global all_caps_state
+    
+    # If already active, don't re-activate
+    if all_caps_state["active"]:
+        return False
     
     # Check if user is requesting all caps
     message_lower = message.lower()
@@ -104,15 +108,18 @@ def check_all_caps_mode(message):
         
         # Check cooldown
         if current_time - all_caps_state["last_used"] < cooldown:
+            remaining = int(cooldown - (current_time - all_caps_state["last_used"]))
+            print(f"[Filter] All caps on cooldown ({remaining}s remaining)")
             return False  # Still on cooldown
         
         # Enable all caps mode
         all_caps_state["active"] = True
         all_caps_state["message_count"] = 0
         all_caps_state["last_used"] = current_time
+        print(f"[Filter] ✓ All caps mode ACTIVATED! Will yell for next 3 responses")
         return True
     
-    return all_caps_state["active"]
+    return False
 
 
 def apply_all_caps_mode(text):
@@ -123,16 +130,22 @@ def apply_all_caps_mode(text):
     
     global all_caps_state
     
+    # Debug output
+    print(f"[Filter DEBUG] active={all_caps_state['active']}, count={all_caps_state['message_count']}")
+    
     if not all_caps_state["active"]:
         return text
     
     # Increment counter
     all_caps_state["message_count"] += 1
     
+    print(f"[Filter] 📢 All caps message #{all_caps_state['message_count']}/{max_messages}")
+    
     # Check if we should stop yelling
     if all_caps_state["message_count"] >= max_messages:
         all_caps_state["active"] = False
         all_caps_state["message_count"] = 0
+        print(f"[Filter] ✓ All caps mode DEACTIVATED after {max_messages} messages")
         # Add a note that we're done yelling
         return text.upper() + " ...okay I'm done yelling now"
     
@@ -208,7 +221,7 @@ def filter_message(text, username=None):
     # Apply emoji limit
     text = limit_emojis(text)
     
-    # Apply all caps mode if active
+    # Apply all caps mode if active (THIS IS THE KEY PART)
     text = apply_all_caps_mode(text)
     
     # Enforce max length
@@ -219,16 +232,12 @@ def filter_message(text, username=None):
     return True, text, None
 
 
-def should_enable_all_caps(message):
-    """Check if all caps mode should be enabled based on user message."""
-    return check_all_caps_mode(message)
-
-
 def reset_all_caps_mode():
     """Manually reset all caps mode."""
     global all_caps_state
     all_caps_state["active"] = False
     all_caps_state["message_count"] = 0
+    print("[Filter] All caps mode manually reset")
 
 
 def get_safety_response():
@@ -249,23 +258,26 @@ if __name__ == "__main__":
     print("MedlarTV Content Filter - Testing\n")
     
     test_cases = [
-        ("This is a normal message", None),
-        ("Let's YELL AND SCREAM!", None),
-        ("Can you yell for me?", None),
-        ("Another yelling message", None),
-        ("And one more loud one", None),
-        ("Still yelling?", None),  # Should stop after 3
+        "This is a normal message",
+        "Can you YELL for me?",  # Should activate
+        "Another message",       # Should be in caps (1/3)
+        "And another",           # Should be in caps (2/3)
+        "Last caps one",         # Should be in caps (3/3) + deactivate
+        "Back to normal",        # Should be normal
     ]
     
-    for message, username in test_cases:
-        print(f"\nInput: {message}")
+    for i, message in enumerate(test_cases):
+        print(f"\n{'='*60}")
+        print(f"Test {i+1}: {message}")
+        print(f"{'='*60}")
         
-        # Check if all caps should be enabled
+        # Check if this message wants to enable caps
         if should_enable_all_caps(message):
-            print("  → All caps mode activated!")
+            print("  → User requested all caps mode!")
         
         # Filter the response
-        is_safe, filtered, reason = filter_message("Response text here", username)
+        response_text = f"Response to: {message}"
+        is_safe, filtered, reason = filter_message(response_text, None)
         
         if is_safe:
             print(f"  Output: {filtered}")
