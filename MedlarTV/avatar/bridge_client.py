@@ -10,7 +10,7 @@ RECONNECT_DELAY = 5  # seconds
 
 def start_bridge_loop():
     """Persistent connection to MedlarTV Core bridge."""
-    print(f"[Bridge] 🚀 Starting Avatar Bridge at {BRIDGE_URL}")
+    print(f"[Bridge] Starting Avatar Bridge at {BRIDGE_URL}")
 
     while True:
         try:
