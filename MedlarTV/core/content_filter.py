@@ -59,8 +59,16 @@ def contains_blocked_word(text, blocked_words):
     normalized = normalize_text(text)
     
     for word in blocked_words:
+        # Skip censored words (with asterisks) - they're examples
+        if '*' in word:
+            continue
+            
         # Normalize the blocked word too
         normalized_word = normalize_text(word)
+        
+        # Skip if normalized word is too short (avoid false positives)
+        if len(normalized_word) < 4:
+            continue
         
         # Check for whole word matches
         pattern = r'\b' + re.escape(normalized_word) + r'\b'
