@@ -12,15 +12,63 @@
 # BLOCKED WORDS - Bot will NEVER say these exact words
 # =============================================================================
 blocked_words:
-  # Slurs and hate speech (add more as needed)
-  - "n***a"
-  - "f****t"
-  - "r****d"
-  - "tr***y"
-  
-  # Add your own words here:
-  # - "badword1"
-  # - "badword2"
+  #Racial & Ethnic Slurs
+  - "nigger"
+  - "nigga"
+  - "chink"
+  - "gook"
+  - "spic"
+  - "wetback"
+  - "beaner"
+  - "sandnigger"
+  - "towelhead"
+  - "paki"
+  - "coon"
+  - "jigaboo"
+  - "porchmonkey"
+  - "zipperhead"
+
+  #LGBTQ+ Slurs
+  - "fag"
+  - "faggot"
+  - "fagot"
+  - "dyke"
+  - "tranny"
+  - "trannie"
+  - "shemale"
+  - "he-she"
+  - "ladyboy"
+  - "no-homo"
+
+  #Disability / Neurodivergence Slurs
+  - "retard"
+  - "retarded"
+  - "sped"
+  - "spastic"
+  - "cripple"
+  - "crip"
+  - "mong"
+  - "windowlicker"
+
+  #Sexist & Misogynistic Slurs
+  - "slut"
+  - "whore"
+  - "hoe"
+  - "bitch"
+  - "cunt"
+  - "thot"
+  - "skank"
+  - "slag"
+
+  #Religious / Anti-Semitic Slurs
+  - "kike"
+  - "yid"
+  - "christkiller"
+  - "raghead"
+  - "islamist" #(context-sensitive — often misused as slur)
+  - "infidel"
+  - "hebe"
+  - "muzzie"
 
 # =============================================================================
 # BLOCKED TOPICS - Bot will refuse to discuss these topics
@@ -33,19 +81,96 @@ blocked_topics:
   - "suicide methods"
   - "self harm"
   - "drug recipes"
-  
+  - "violence"
+  - "gore"
+  - "murder methods"
+  - "torture"
+  - "animal abuse"
+  - "child abuse"
+  - "domestic abuse"
+  - "school shootings"
+  - "mass shootings"
+  - "bomb making"
+  - "weapon crafting"
+  - "explosives"
+  - "arson"
+  - "kidnapping"
+  - "assassination"
+  - "human trafficking"
+  - "blood rituals"
+
   # Political extremism
   - "white supremacy"
   - "terrorism"
-  
-  # Sexual content
+  - "antisemitism"
+  - "islamophobia"
+  - "homophobia"
+  - "transphobia"
+  - "neo-nazi"
+  - "kkk"
+  - "alt-right"
+  - "radicalization"
+  - "incel ideology"
+  - "domestic terrorism"
+  - "hate crimes"
+  - "conspiracy extremism"
+  - "militia movements"
+
+  # Self-harm and suicide
+  - "suicidal ideation"
+  - "self harm instructions"
+  - "eating disorder forums"
+  - "anorexia tips"
+  - "thinspo"
+  - "self mutilation"
+
+  # Illegal or controlled substances
+  - "drug manufacturing"
+  - "meth recipes"
+  - "cocaine production"
+  - "LSD synthesis"
+  - "heroin preparation"
+  - "fentanyl"
+  - "illicit drugs"
+  - "drug dealing"
+  - "black market"
+  - "darknet drug trade"
+
+  # Criminal or exploitative behavior
+  - "hacking tutorials"
+  - "malware creation"
+  - "phishing"
+  - "credit card fraud"
+  - "identity theft"
+  - "ransomware"
+  - "stalking"
+  - "doxxing"
+  - "revenge porn"
+  - "deepfake porn"
+  - "non-consensual content"
+
+  # Sexual content and exploitation
   - "sexual content"
   - "porn"
   - "nsfw"
-  
-  # Add your own topics here:
-  # - "topic1"
-  # - "topic2"
+  - "rape"
+  - "incest"
+  - "child exploitation"
+  - "bestiality"
+  - "fetish content"
+  - "sex trafficking"
+  - "explicit sexual content"
+  - "adult roleplay"
+
+  # Misinformation / conspiracy (optional moderation)
+  - "qanon"
+  - "flat earth"
+  - "vaccine hoax"
+  - "covid denial"
+  - "holocaust denial"
+  - "deep state"
+  - "false flag"
+  - "crisis actor"
 
 # =============================================================================
 # RESPONSE MODES - Controls how the bot talks
