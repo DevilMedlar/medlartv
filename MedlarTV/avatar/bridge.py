@@ -9,7 +9,7 @@ CHANNEL_REGISTRY = {}  # track which Twitch channels are connected
 # --- Client Management ---
 async def register(websocket):
     ACTIVE_CONNECTIONS.add(websocket)
-    print(f"[Bridge] Connected ({len(ACTIVE_CONNECTIONS)})")
+    print(f"[Bridge] ✓ Connected ({len(ACTIVE_CONNECTIONS)})")
     await websocket.send(json.dumps({"event": "handshake", "msg": "connected"}))
 
 
@@ -22,7 +22,7 @@ async def unregister(websocket):
                 sockets.remove(websocket)
                 if not sockets:
                     del CHANNEL_REGISTRY[channel]
-        print(f"[Bridge] ⏸ Disconnected ({len(ACTIVE_CONNECTIONS)})")
+        print(f"[Bridge] ✗ Disconnected ({len(ACTIVE_CONNECTIONS)})")
 
 
 # --- Broadcasting ---
@@ -55,9 +55,9 @@ async def broadcast(payload: dict, channel: str | None = None):
 
     try:
         await asyncio.gather(*(ws.send(msg) for ws in list(targets)))
-        print("[Bridge] Broadcast sent successfully.")
+        print("[Bridge] ✓ Broadcast sent successfully.")
     except Exception as e:
-        print(f"[Bridge] broadcast error: {e}")
+        print(f"[Bridge] ✗ broadcast error: {e}")
 
 
 # --- Connection Handler ---
@@ -78,7 +78,18 @@ async def handler(websocket):
                 channel = data.get("channel", "").lower()
                 if channel:
                     CHANNEL_REGISTRY.setdefault(channel, []).append(websocket)
-                    print(f"[Bridge] Channel registered: {channel}")
+                    print(f"[Bridge] ✓ Channel registered: {channel}")
+
+            # ⭐ NEW: Handle unregister event
+            elif event == "unregister":
+                channel = data.get("channel", "").lower()
+                if channel and channel in CHANNEL_REGISTRY:
+                    if websocket in CHANNEL_REGISTRY[channel]:
+                        CHANNEL_REGISTRY[channel].remove(websocket)
+                        print(f"[Bridge] ✗ Channel unregistered: {channel}")
+                        # Clean up empty channel entries
+                        if not CHANNEL_REGISTRY[channel]:
+                            del CHANNEL_REGISTRY[channel]
 
             elif event == "mood_update":
                 mood = data.get("mood")

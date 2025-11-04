@@ -1,9 +1,3 @@
-#!/usr/bin/env python3
-"""
-MedlarTV Twitch Listener - Fixed Co-Pilot Channel Management
-Now properly leaves channels when co-pilots are removed
-"""
-
 import os
 import socket
 import time
@@ -17,7 +11,9 @@ from MedlarTV.core.memory import record_mood, get_dominant_weighted_mood
 from MedlarTV.core.expression import blended_phrase
 from MedlarTV.core.context import record_session_mood
 from MedlarTV.core.fuzzy_trigger import should_respond as fuzzy_should_respond, find_triggers_in_message
-from MedlarTV.avatar.bridge_client import register_channel, send_mood_update
+from MedlarTV.avatar.bridge_client import register_channel, send_mood_update, ws_send
+
+# ⭐ ADD THIS IMPORT - Content Filter
 from MedlarTV.core.content_filter import (
     filter_message,
     should_enable_all_caps,
@@ -56,10 +52,10 @@ recent_msgs = {}
 LAST_REPLY_AT = 0
 COPILOT_CONFIG_PATH = Path("MedlarTV/config/copilots.yaml")
 
-# ⭐ NEW: Track the socket globally so we can use it in remove_copilot
+# ⭐ Track the socket globally so we can use it in add/remove copilot
 SOCKET = None
 
-# --- Config Variables ---
+# --- Config Variables (populated by load_config) ---
 COMMANDS = {}
 PERSONALITY = {}
 MOODS = {}
@@ -106,7 +102,7 @@ def save_copilots():
 
 
 def add_copilot(username: str) -> bool:
-    """Add a co-pilot and join their channel."""
+    """Add a co-pilot, join their channel, and register with bridge."""
     global SOCKET
     username = username.lower()
     
@@ -116,14 +112,28 @@ def add_copilot(username: str) -> bool:
     CO_PILOTS.add(username)
     save_copilots()
     
-    # ⭐ Join the co-pilot's channel
+    # Join the co-pilot's channel
     if SOCKET:
         copilot_channel = f"#{username}"
         try:
             SOCKET.send(f"JOIN {copilot_channel}\r\n".encode("utf-8"))
-            log.info(f"✅ Co-Pilot added: {username} | Joined channel: {copilot_channel}")
+            log.info(f"✅ Joined channel: {copilot_channel}")
+            
+            # ⭐ NEW: Register with WebSocket bridge
+            try:
+                register_channel(copilot_channel)
+                log.info(f"✅ Registered with bridge: {copilot_channel}")
+            except Exception as e:
+                log.warning(f"[Bridge] Failed to register {copilot_channel}: {e}")
+            
+            log.info(f"✅ Co-Pilot added: {username}")
+            
         except Exception as e:
             log.error(f"Failed to join channel {copilot_channel}: {e}")
+            # Rollback if join failed
+            CO_PILOTS.remove(username)
+            save_copilots()
+            return False
     else:
         log.info(f"✅ Co-Pilot added: {username} (socket not ready, will join on next connect)")
     
@@ -131,7 +141,7 @@ def add_copilot(username: str) -> bool:
 
 
 def remove_copilot(username: str) -> bool:
-    """Remove a co-pilot and leave their channel."""
+    """Remove a co-pilot, leave their channel, and unregister from bridge."""
     global SOCKET
     username = username.lower()
     
@@ -141,12 +151,26 @@ def remove_copilot(username: str) -> bool:
     CO_PILOTS.remove(username)
     save_copilots()
     
-    # ⭐ PART (leave) the co-pilot's channel
+    # PART (leave) the co-pilot's channel
     if SOCKET:
         copilot_channel = f"#{username}"
         try:
             SOCKET.send(f"PART {copilot_channel}\r\n".encode("utf-8"))
-            log.info(f"❌ Co-Pilot removed: {username} | Left channel: {copilot_channel}")
+            log.info(f"❌ Left channel: {copilot_channel}")
+            
+            # ⭐ NEW: Unregister from WebSocket bridge
+            try:
+                ws_send({
+                    "event": "unregister",
+                    "platform": "twitch",
+                    "channel": copilot_channel
+                })
+                log.info(f"❌ Unregistered from bridge: {copilot_channel}")
+            except Exception as e:
+                log.warning(f"[Bridge] Failed to unregister {copilot_channel}: {e}")
+            
+            log.info(f"❌ Co-Pilot removed: {username}")
+            
         except Exception as e:
             log.error(f"Failed to leave channel {copilot_channel}: {e}")
     else:
@@ -222,7 +246,7 @@ def can_reply():
 
 # --- MOOD HANDLING ---
 def switch_mood(new_mood, auto=False):
-    """Update MedlarTV's mood and broadcast to bridge."""
+    """Update MedlarTV's mood and broadcast to bridge (sync-safe)."""
     global current_mood
     if new_mood == current_mood:
         return
@@ -351,6 +375,7 @@ def should_respond_to_message(username, message):
 def get_llm_response(username, message):
     """Get AI response from the Core API."""
     try:
+        # Pass the formatted role instead of raw username
         role = get_user_role(username)
         sender = format_username(username) if role != "user" else username
         
@@ -364,6 +389,7 @@ def get_llm_response(username, message):
             data = response.json()
             reply = data.get("reply", "")
             
+            # Limit response to 500 characters (Twitch message limit)
             if len(reply) > 500:
                 reply = reply[:497] + "..."
                 log.warning(f"[LLM] Response truncated to 500 chars")
@@ -387,6 +413,7 @@ def format_reply_with_mood(reply):
     prefix = style.get("prefix", "")
     suffix = style.get("suffix", "")
     
+    # Don't double-add styling if it's already there
     if prefix and not reply.startswith(prefix):
         reply = f"{prefix} {reply}"
     if suffix and not reply.endswith(suffix):
@@ -413,16 +440,23 @@ def connect():
     sock.send(f"JOIN {CHANNEL}\r\n".encode("utf-8"))
     log.info(f"Connected to {CHANNEL} as {NICK} (Pilot: {PILOT})")
 
+    # ⭐ Store socket globally first so add_copilot can use it
+    SOCKET = sock
+
     # Join all co-pilot channels
     for copilot in CO_PILOTS:
         copilot_channel = f"#{copilot}"
         sock.send(f"JOIN {copilot_channel}\r\n".encode("utf-8"))
         log.info(f"Joined Co-Pilot channel: {copilot_channel}")
+        
+        # ⭐ NEW: Register each co-pilot channel with bridge
+        try:
+            register_channel(copilot_channel)
+            log.info(f"Registered with bridge: {copilot_channel}")
+        except Exception as e:
+            log.warning(f"[Bridge] Failed to register {copilot_channel}: {e}")
 
-    # ⭐ Store socket globally so remove_copilot can use it
-    SOCKET = sock
-
-    # Register with bridge
+    # Register main channel with bridge
     for attempt in range(3):
         try:
             register_channel(CHANNEL)
@@ -476,7 +510,7 @@ def listen(sock):
         msg_id = tags.get("id")
         reply_parent_msg_id = tags.get("reply-parent-msg-id")
 
-        # Auto mood detection
+        # Auto mood detection from keywords
         msg_lower = resp.lower()
         detected_mood = None
         if "hype" in msg_lower or "let's go" in msg_lower or "pog" in msg_lower:
@@ -491,7 +525,7 @@ def listen(sock):
         if detected_mood:
             switch_mood(detected_mood, auto=True)
 
-        # Process PRIVMSG
+        # Process PRIVMSG (actual chat messages)
         if "PRIVMSG" in resp and "!" in resp:
             try:
                 username = resp.split("!", 1)[0][1:].lower()
@@ -500,23 +534,26 @@ def listen(sock):
 
                 message = resp.split("PRIVMSG", 1)[1].split(":", 1)[1].strip()
                 
+                # Log with role
                 role = get_user_role(username)
                 role_tag = {"pilot": "[PILOT]", "copilot": "[CO-PILOT]", "user": ""}.get(role, "")
                 log.info(f"[Twitch→Core] {role_tag} {username}: {message}")
 
+                # Store message in recent history
                 if msg_id:
                     recent_msgs[msg_id] = {"user": username, "message": message}
                     if len(recent_msgs) > 80:
                         oldest = next(iter(recent_msgs))
                         recent_msgs.pop(oldest, None)
 
-                # Handle commands
+                # Handle commands first (! commands)
                 if message.startswith("!"):
                     if handle_command(sock, username, message, msg_id):
-                        continue
+                        continue  # Command handled, don't process further
 
-                # Check if should respond
+                # Check if we should respond to this message
                 if not should_respond_to_message(username, message):
+                    # Even if not responding, still detect mood
                     mood = detect_mood_from_message(message)
                     if mood:
                         switch_mood(mood, auto=True)
@@ -527,7 +564,7 @@ def listen(sock):
                     log.info("[Cooldown] Skipping reply (rate limited)")
                     continue
 
-                # Check for all caps mode
+                # Check if user wants all caps mode
                 if should_enable_all_caps(message):
                     log.info(f"[Filter] All caps mode activated by {username}")
 
@@ -543,7 +580,9 @@ def listen(sock):
                 is_safe, filtered_reply, reason = filter_message(llm_reply, username)
                 
                 if not is_safe:
+                    # Content was blocked
                     log.warning(f"[Filter] Response blocked: {reason}")
+                    # Send a safe alternative response
                     safe_reply = get_safety_response()
                     send_reply(sock, safe_reply, msg_id if reply_parent_msg_id else None)
                     continue
@@ -551,7 +590,7 @@ def listen(sock):
                 # Format with mood styling
                 formatted_reply = format_reply_with_mood(filtered_reply)
                 
-                # Send reply
+                # Send the filtered reply
                 send_reply(sock, formatted_reply, msg_id if reply_parent_msg_id else None)
 
             except Exception as e:
