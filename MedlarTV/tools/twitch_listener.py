@@ -52,7 +52,7 @@ recent_msgs = {}
 LAST_REPLY_AT = 0
 COPILOT_CONFIG_PATH = Path("MedlarTV/config/copilots.yaml")
 
-# ⭐ Track the socket globally so we can use it in add/remove copilot
+# ⭐ NEW: Track the socket globally so we can use it in remove_copilot
 SOCKET = None
 
 # --- Config Variables (populated by load_config) ---
@@ -460,7 +460,7 @@ def connect():
     for attempt in range(3):
         try:
             register_channel(CHANNEL)
-            log.info("[Bridge] Channel registered successfully")
+            log.info("[Bridge] Main channel registered successfully")
             break
         except Exception as e:
             log.warning(f"[Bridge] register_channel failed (try {attempt+1}/3): {e}")
@@ -564,7 +564,7 @@ def listen(sock):
                     log.info("[Cooldown] Skipping reply (rate limited)")
                     continue
 
-                # Check if user wants all caps mode
+                # ⭐ NEW: Check if user wants all caps mode
                 if should_enable_all_caps(message):
                     log.info(f"[Filter] All caps mode activated by {username}")
 
@@ -576,7 +576,7 @@ def listen(sock):
                     log.warning("[LLM] No response generated")
                     continue
 
-                # Apply content filter
+                # ⭐ NEW: Apply content filter
                 is_safe, filtered_reply, reason = filter_message(llm_reply, username)
                 
                 if not is_safe:
