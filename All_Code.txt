@@ -80,6 +80,41 @@ MEDLARTV_RETRY=25
 # === Twitch Message Limits ===
 MAX_MESSAGE_LENGTH=500
 
+# === Feature Flags (Quick Win 1) ===
+# Multi-Language Support
+ENABLE_TRANSLATION=true
+DEFAULT_LANGUAGE=en
+SUPPORTED_LANGUAGES=en,es,fr,de,ja,ko,pt
+
+# Response Templates
+ENABLE_RESPONSE_TEMPLATES=true
+MIN_TEMPLATE_VARIATION=3
+
+# Moderation
+ENABLE_AUTO_MOD=true
+MOD_LINK_FILTER=true
+MOD_CAPS_FILTER=true
+MOD_SPAM_FILTER=true
+
+# Stream Management
+ENABLE_STREAM_MANAGEMENT=true
+TWITCH_CLIENT_ID=your_client_id_here
+TWITCH_CLIENT_SECRET=your_client_secret_here
+
+# Twitch Events
+ENABLE_RAID_DETECTION=true
+ENABLE_SUB_DETECTION=true
+ENABLE_CHANNEL_POINTS=true
+ENABLE_EMOTE_RESPONSES=true
+
+# Rate Limiting (will be removed/shortened later)
+COOLDOWN_SECONDS=8
+MAX_USER_COOLDOWN=30
+
+# Interaction Logging
+ENABLE_INTERACTION_LOGGING=true
+LOG_DIRECTORY=logs
+
 
 ================================================================================
 FILE: .gitignore
@@ -721,6 +756,36 @@ commands:
   
   listcopilots:
     response: "Active Co-Pilots: {copilots}"
+  
+  # ⭐ NEW: Stream management commands
+  streaminfo:
+    response: "Getting stream info..."
+  
+  title:
+    response: "Current stream title"
+  
+  game:
+    response: "Current game/category"
+  
+  # ⭐ NEW: Moderation commands (pilot/mod only)
+  timeout:
+    response: "User timed out"
+    requires_pilot: true
+  
+  ban:
+    response: "User banned"
+    requires_pilot: true
+  
+  warn:
+    response: "Warning issued"
+    requires_pilot: true
+  
+  whitelist:
+    response: "Domain whitelisted"
+    requires_pilot: true
+  
+  modstats:
+    response: "Moderation statistics"
 
 
 ================================================================================
@@ -1022,6 +1087,55 @@ revoked: []
 
 
 ================================================================================
+FILE: MedlarTV/config/link_whitelist.yaml
+================================================================================
+
+# MedlarTV Link Whitelist Configuration
+# Domains in this list are allowed to be posted in chat
+
+whitelist:
+  # Twitch
+  - "twitch.tv"
+  - "clips.twitch.tv"
+  - "m.twitch.tv"
+  
+  # Social Media
+  - "twitter.com"
+  - "x.com"
+  - "youtube.com"
+  - "youtu.be"
+  - "instagram.com"
+  - "tiktok.com"
+  
+  # Gaming & Community
+  - "discord.gg"
+  - "discord.com"
+  - "reddit.com"
+  - "steamcommunity.com"
+  - "store.steampowered.com"
+  
+  # Media Sharing
+  - "imgur.com"
+  - "i.imgur.com"
+  - "giphy.com"
+  - "gfycat.com"
+  - "streamable.com"
+  
+  # Developer / Tech
+  - "github.com"
+  - "pastebin.com"
+  - "hastebin.com"
+  
+  # Streaming Tools
+  - "streamlabs.com"
+  - "streamelements.com"
+  - "nightbot.tv"
+  
+  # Add your custom domains below
+  # - "yourwebsite.com"
+
+
+================================================================================
 FILE: MedlarTV/config/moods.yaml
 ================================================================================
 
@@ -1072,6 +1186,8 @@ personality:
   tone: "casual, witty, a bit chaotic but friendly"
   emoji_style: ["😎", "🔥", "💬", "🈹"]
   trigger_keywords: ["medlar", "MedlarTV", "medlartv", "MEDLARTV"]
+  
+  # Generic replies with variation
   generic_replies:
     - "Yeah, totally agree {user} {emoji}"
     - "I felt that {emoji}"
@@ -1079,6 +1195,97 @@ personality:
     - "Good point, {user}!"
     - "Haha true {user}! {emoji}"
     - "You called, {user}? {emoji}"
+  
+  # ⭐ NEW: Learning preferences (Quick Win 2)
+  learning:
+    adapt_tone: true
+    remember_users: true
+    favorite_topics: []
+    user_preferences: {}
+  
+  # ⭐ NEW: Response Templates
+  response_templates:
+    greeting:
+      - "Hey {user}! 👋 What's up?"
+      - "Yo {user}! Ready to rock? 🔥"
+      - "{user}! Good to see you! 😎"
+      - "What's good, {user}? 💬"
+    
+    agreement:
+      - "Absolutely, {user}!"
+      - "You're so right {emoji}"
+      - "Facts, {user} {emoji}"
+      - "100% agree!"
+      - "This! {emoji}"
+    
+    hype:
+      - "LET'S GOOOOO {user}! 🔥"
+      - "WE'RE SO BACK! 🚀"
+      - "ENERGY CHECK ✅ {user}!"
+      - "THIS IS IT {user}! 💪"
+    
+    support:
+      - "You got this, {user}! 💖"
+      - "Believe in yourself! ✨"
+      - "You're doing great, {user}! 🌟"
+      - "Keep pushing, {user}! 💪"
+    
+    sarcastic:
+      - "Oh really? 😏"
+      - "Sure, {user}... sure 🙃"
+      - "I see what you did there 😉"
+      - "Interesting take, {user} 🤨"
+  
+  # ⭐ NEW: Multi-Language Support
+  languages:
+    en: "English"
+    es: "Spanish"
+    fr: "French"
+    de: "German"
+    ja: "Japanese"
+    ko: "Korean"
+    pt: "Portuguese"
+  
+  # Common phrases in multiple languages
+  translations:
+    greeting:
+      en: "Hello"
+      es: "Hola"
+      fr: "Bonjour"
+      de: "Hallo"
+      ja: "こんにちは"
+      ko: "안녕하세요"
+      pt: "Olá"
+    
+    thanks:
+      en: "Thanks"
+      es: "Gracias"
+      fr: "Merci"
+      de: "Danke"
+      ja: "ありがとう"
+      ko: "감사합니다"
+      pt: "Obrigado"
+    
+    bye:
+      en: "Goodbye"
+      es: "Adiós"
+      fr: "Au revoir"
+      de: "Auf Wiedersehen"
+      ja: "さようなら"
+      ko: "안녕히 가세요"
+      pt: "Tchau"
+  
+  # ⭐ NEW: Twitch Emote Support
+  emotes:
+    enable: true
+    custom_emotes: []  # Will be populated by bot
+    default_emotes:
+      - "Kappa"
+      - "PogChamp"
+      - "LUL"
+      - "NotLikeThis"
+      - "BibleThump"
+      - "devilmeGODMODE"
 
 
 ================================================================================
@@ -1115,7 +1322,7 @@ FILE: MedlarTV/core/__init__.py
 
 """
 MedlarTV Core Module
-Contains the brain, memory, sentiment analysis, and context tracking.
+Contains the brain, memory, sentiment analysis, context tracking, and all new features
 """
 
 from .memory import (
@@ -1146,6 +1353,75 @@ from .fuzzy_trigger import (
     is_trigger_word
 )
 
+# Translation Module
+from .translation import (
+    detect_language,
+    translate_phrase,
+    translate_message,
+    get_multilingual_greeting,
+    get_multilingual_thanks,
+    add_language_indicator
+)
+
+# Response Templates Module
+from .response_templates import (
+    get_template,
+    get_greeting,
+    get_agreement,
+    get_hype,
+    get_support,
+    get_sarcastic,
+    get_smart_response
+)
+
+# Interaction Logger Module
+from .interaction_logger import (
+    log_interaction,
+    log_command,
+    log_mood_change,
+    log_error,
+    get_interaction_stats
+)
+
+# Moderation Module
+from .moderation import (
+    check_message,
+    execute_timeout,
+    execute_ban,
+    execute_delete,
+    handle_mod_command,
+    is_mod_command,
+    load_link_whitelist,
+    get_user_timeout_count
+)
+
+# Stream Management Module
+from .stream_management import (
+    get_stream_info,
+    get_channel_info,
+    update_stream_title,
+    update_stream_category,
+    search_game,
+    get_top_games,
+    format_stream_info
+)
+
+# Twitch Events Module
+from .twitch_events import (
+    detect_raid,
+    detect_subscription,
+    detect_channel_point_redemption,
+    detect_bits,
+    get_raid_response,
+    get_sub_response,
+    get_channel_point_response,
+    get_bits_response,
+    load_global_emotes,
+    load_channel_emotes,
+    add_random_emote,
+    extract_emotes_from_message
+)
+
 __all__ = [
     # Memory functions
     'load_memory',
@@ -1172,6 +1448,63 @@ __all__ = [
     'fuzzy_should_respond',
     'find_triggers_in_message',
     'is_trigger_word',
+    
+    # Translation
+    'detect_language',
+    'translate_phrase',
+    'translate_message',
+    'get_multilingual_greeting',
+    'get_multilingual_thanks',
+    'add_language_indicator',
+    
+    # Response Templates
+    'get_template',
+    'get_greeting',
+    'get_agreement',
+    'get_hype',
+    'get_support',
+    'get_sarcastic',
+    'get_smart_response',
+    
+    # Interaction Logging
+    'log_interaction',
+    'log_command',
+    'log_mood_change',
+    'log_error',
+    'get_interaction_stats',
+    
+    # Moderation
+    'check_message',
+    'execute_timeout',
+    'execute_ban',
+    'execute_delete',
+    'handle_mod_command',
+    'is_mod_command',
+    'load_link_whitelist',
+    'get_user_timeout_count',
+    
+    # Stream Management
+    'get_stream_info',
+    'get_channel_info',
+    'update_stream_title',
+    'update_stream_category',
+    'search_game',
+    'get_top_games',
+    'format_stream_info',
+    
+    # Twitch Events
+    'detect_raid',
+    'detect_subscription',
+    'detect_channel_point_redemption',
+    'detect_bits',
+    'get_raid_response',
+    'get_sub_response',
+    'get_channel_point_response',
+    'get_bits_response',
+    'load_global_emotes',
+    'load_channel_emotes',
+    'add_random_emote',
+    'extract_emotes_from_message',
 ]
 
 
@@ -1882,6 +2215,292 @@ if __name__ == "__main__":
 
 
 ================================================================================
+FILE: MedlarTV/core/interaction_logger.py
+================================================================================
+
+"""
+MedlarTV Interaction Logger
+Logs all chat interactions for analytics and learning
+"""
+
+import os
+import json
+from datetime import datetime
+from pathlib import Path
+from typing import Optional, Dict, Any
+
+# Check if logging is enabled
+ENABLE_LOGGING = os.getenv("ENABLE_INTERACTION_LOGGING", "true").lower() == "true"
+LOG_DIRECTORY = os.getenv("LOG_DIRECTORY", "logs")
+
+
+def ensure_log_directory():
+    """Create logs directory if it doesn't exist"""
+    log_path = Path(LOG_DIRECTORY)
+    log_path.mkdir(parents=True, exist_ok=True)
+    return log_path
+
+
+def log_interaction(
+    username: str,
+    message: str,
+    response: str,
+    mood: str = "unknown",
+    language: str = "en",
+    metadata: Optional[Dict[str, Any]] = None
+):
+    """
+    Log a chat interaction to JSONL file for analytics.
+    
+    Args:
+        username: User who sent the message
+        message: User's message
+        response: Bot's response
+        mood: Current bot mood
+        language: Detected language
+        metadata: Additional metadata (optional)
+    """
+    if not ENABLE_LOGGING:
+        return
+    
+    try:
+        log_path = ensure_log_directory()
+        log_file = log_path / "interactions.jsonl"
+        
+        # Create log entry
+        log_entry = {
+            "timestamp": datetime.now().isoformat(),
+            "user": username,
+            "message": message,
+            "response": response,
+            "mood": mood,
+            "language": language
+        }
+        
+        # Add metadata if provided
+        if metadata:
+            log_entry["metadata"] = metadata
+        
+        # Append to JSONL file
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
+        
+        # Success log (optional, can be removed for performance)
+        # print(f"[Logger] Logged interaction: {username}")
+        
+    except Exception as e:
+        print(f"[Logger] Error logging interaction: {e}")
+
+
+def log_command(username: str, command: str, success: bool = True):
+    """Log a command usage"""
+    if not ENABLE_LOGGING:
+        return
+    
+    try:
+        log_path = ensure_log_directory()
+        log_file = log_path / "commands.jsonl"
+        
+        log_entry = {
+            "timestamp": datetime.now().isoformat(),
+            "user": username,
+            "command": command,
+            "success": success
+        }
+        
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(json.dumps(log_entry) + "\n")
+        
+    except Exception as e:
+        print(f"[Logger] Error logging command: {e}")
+
+
+def log_mood_change(old_mood: str, new_mood: str, trigger: str = "auto"):
+    """Log mood changes"""
+    if not ENABLE_LOGGING:
+        return
+    
+    try:
+        log_path = ensure_log_directory()
+        log_file = log_path / "moods.jsonl"
+        
+        log_entry = {
+            "timestamp": datetime.now().isoformat(),
+            "old_mood": old_mood,
+            "new_mood": new_mood,
+            "trigger": trigger
+        }
+        
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(json.dumps(log_entry) + "\n")
+        
+    except Exception as e:
+        print(f"[Logger] Error logging mood change: {e}")
+
+
+def log_error(error_type: str, error_message: str, context: Optional[Dict] = None):
+    """Log errors for debugging"""
+    if not ENABLE_LOGGING:
+        return
+    
+    try:
+        log_path = ensure_log_directory()
+        log_file = log_path / "errors.jsonl"
+        
+        log_entry = {
+            "timestamp": datetime.now().isoformat(),
+            "error_type": error_type,
+            "error_message": error_message
+        }
+        
+        if context:
+            log_entry["context"] = context
+        
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
+        
+    except Exception as e:
+        print(f"[Logger] Error logging error (meta!): {e}")
+
+
+def get_interaction_stats(days: int = 7) -> Dict[str, Any]:
+    """
+    Get statistics from interaction logs.
+    
+    Args:
+        days: Number of days to analyze (default: 7)
+    
+    Returns:
+        Dictionary with stats
+    """
+    try:
+        log_path = ensure_log_directory()
+        log_file = log_path / "interactions.jsonl"
+        
+        if not log_file.exists():
+            return {"error": "No interaction logs found"}
+        
+        # Read logs
+        interactions = []
+        with open(log_file, "r", encoding="utf-8") as f:
+            for line in f:
+                try:
+                    interactions.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+        
+        # Calculate stats
+        total_interactions = len(interactions)
+        unique_users = len(set(i["user"] for i in interactions))
+        
+        # Mood distribution
+        mood_counts = {}
+        for interaction in interactions:
+            mood = interaction.get("mood", "unknown")
+            mood_counts[mood] = mood_counts.get(mood, 0) + 1
+        
+        # Language distribution
+        language_counts = {}
+        for interaction in interactions:
+            lang = interaction.get("language", "en")
+            language_counts[lang] = language_counts.get(lang, 0) + 1
+        
+        # Top users
+        user_counts = {}
+        for interaction in interactions:
+            user = interaction["user"]
+            user_counts[user] = user_counts.get(user, 0) + 1
+        
+        top_users = sorted(user_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+        
+        return {
+            "total_interactions": total_interactions,
+            "unique_users": unique_users,
+            "mood_distribution": mood_counts,
+            "language_distribution": language_counts,
+            "top_users": dict(top_users),
+            "period_days": days
+        }
+        
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def clear_old_logs(days: int = 30):
+    """
+    Clear logs older than specified days (for storage management).
+    
+    Args:
+        days: Keep logs from last N days
+    """
+    try:
+        log_path = ensure_log_directory()
+        cutoff = datetime.now().timestamp() - (days * 24 * 60 * 60)
+        
+        for log_file in log_path.glob("*.jsonl"):
+            # Read and filter logs
+            filtered_logs = []
+            
+            with open(log_file, "r", encoding="utf-8") as f:
+                for line in f:
+                    try:
+                        entry = json.loads(line)
+                        timestamp = datetime.fromisoformat(entry["timestamp"]).timestamp()
+                        
+                        if timestamp >= cutoff:
+                            filtered_logs.append(line)
+                    except:
+                        continue
+            
+            # Write back filtered logs
+            with open(log_file, "w", encoding="utf-8") as f:
+                f.writelines(filtered_logs)
+        
+        print(f"[Logger] Cleared logs older than {days} days")
+        
+    except Exception as e:
+        print(f"[Logger] Error clearing old logs: {e}")
+
+
+# Example usage and testing
+if __name__ == "__main__":
+    print("=" * 60)
+    print("MedlarTV Interaction Logger - Testing")
+    print("=" * 60)
+    
+    print("\n--- Logging Test Interactions ---")
+    test_interactions = [
+        ("User1", "Hey MedlarTV!", "Hey User1! 👋", "chill", "en"),
+        ("User2", "Hola!", "Hola User2! 🇪🇸", "hype", "es"),
+        ("User3", "Let's go!", "LET'S GOOOO! 🔥", "hype", "en"),
+        ("User1", "Thanks!", "You're welcome! 💖", "supportive", "en"),
+    ]
+    
+    for username, message, response, mood, language in test_interactions:
+        log_interaction(username, message, response, mood, language)
+        print(f"✓ Logged: {username}: {message}")
+    
+    print("\n--- Logging Commands ---")
+    log_command("User1", "!ping", True)
+    log_command("User2", "!mood", True)
+    print("✓ Logged commands")
+    
+    print("\n--- Logging Mood Changes ---")
+    log_mood_change("chill", "hype", "keyword")
+    log_mood_change("hype", "supportive", "auto")
+    print("✓ Logged mood changes")
+    
+    print("\n--- Getting Stats ---")
+    stats = get_interaction_stats()
+    print(json.dumps(stats, indent=2))
+    
+    print("\n--- Log Files Created ---")
+    log_path = Path(LOG_DIRECTORY)
+    for log_file in log_path.glob("*.jsonl"):
+        print(f"  📄 {log_file.name}")
+
+
+================================================================================
 FILE: MedlarTV/core/llm_brain.py
 ================================================================================
 
@@ -2207,6 +2826,611 @@ def reset_memory_on_shutdown():
 
 
 ================================================================================
+FILE: MedlarTV/core/moderation.py
+================================================================================
+
+"""
+MedlarTV Moderation Module
+Auto-moderation with link filtering, caps detection, spam prevention, and mod commands
+"""
+
+import os
+import re
+import time
+from typing import Optional, Dict, List, Tuple
+from collections import defaultdict
+from pathlib import Path
+import yaml
+
+# Feature flags
+ENABLE_AUTO_MOD = os.getenv("ENABLE_AUTO_MOD", "true").lower() == "true"
+MOD_LINK_FILTER = os.getenv("MOD_LINK_FILTER", "true").lower() == "true"
+MOD_CAPS_FILTER = os.getenv("MOD_CAPS_FILTER", "true").lower() == "true"
+MOD_SPAM_FILTER = os.getenv("MOD_SPAM_FILTER", "true").lower() == "true"
+
+# Moderation settings
+CAPS_THRESHOLD = 0.7  # 70% caps triggers filter
+MIN_MESSAGE_LENGTH = 10  # Minimum length to check caps
+SPAM_MESSAGE_LIMIT = 5  # Messages per window
+SPAM_TIME_WINDOW = 30  # Seconds
+LINK_WHITELIST_FILE = Path("MedlarTV/config/link_whitelist.yaml")
+
+# Tracking
+user_message_history = defaultdict(list)  # {username: [(message, timestamp), ...]}
+warned_users = set()  # Users who have been warned
+timeout_history = defaultdict(list)  # {username: [timestamp, ...]}
+
+
+def load_link_whitelist() -> List[str]:
+    """Load whitelisted domains that are allowed"""
+    if not LINK_WHITELIST_FILE.exists():
+        # Create default whitelist
+        default_whitelist = {
+            "whitelist": [
+                "twitch.tv",
+                "clips.twitch.tv",
+                "twitter.com",
+                "x.com",
+                "youtube.com",
+                "youtu.be",
+                "discord.gg",
+                "imgur.com",
+                "reddit.com",
+                "github.com"
+            ]
+        }
+        LINK_WHITELIST_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(LINK_WHITELIST_FILE, 'w') as f:
+            yaml.safe_dump(default_whitelist, f)
+        return default_whitelist["whitelist"]
+    
+    try:
+        with open(LINK_WHITELIST_FILE, 'r') as f:
+            data = yaml.safe_load(f) or {}
+        return data.get("whitelist", [])
+    except:
+        return []
+
+
+def contains_link(message: str) -> Tuple[bool, Optional[str]]:
+    """
+    Check if message contains a link.
+    
+    Returns:
+        (has_link, link_or_none)
+    """
+    # URL patterns
+    url_pattern = r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'
+    domain_pattern = r'\b(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}\b'
+    
+    # Check for explicit URLs
+    urls = re.findall(url_pattern, message)
+    if urls:
+        return True, urls[0]
+    
+    # Check for domain-like patterns
+    domains = re.findall(domain_pattern, message)
+    if domains:
+        # Filter out common false positives
+        false_positives = ["twitch.tv", "youtube.com", "lol.com", "bruh.moment"]
+        for domain in domains:
+            if domain.lower() not in false_positives:
+                return True, domain
+    
+    return False, None
+
+
+def is_link_allowed(link: str) -> bool:
+    """Check if a link is whitelisted"""
+    whitelist = load_link_whitelist()
+    
+    for allowed_domain in whitelist:
+        if allowed_domain.lower() in link.lower():
+            return True
+    
+    return False
+
+
+def check_caps(message: str) -> bool:
+    """
+    Check if message is excessively capitalized.
+    
+    Returns:
+        True if message violates caps policy
+    """
+    if len(message) < MIN_MESSAGE_LENGTH:
+        return False
+    
+    # Count caps vs total letters
+    letters = [c for c in message if c.isalpha()]
+    if not letters:
+        return False
+    
+    caps_count = sum(1 for c in letters if c.isupper())
+    caps_ratio = caps_count / len(letters)
+    
+    return caps_ratio > CAPS_THRESHOLD
+
+
+def check_spam(username: str, message: str) -> bool:
+    """
+    Check if user is spamming messages.
+    
+    Returns:
+        True if user is spamming
+    """
+    current_time = time.time()
+    
+    # Clean old messages outside time window
+    user_message_history[username] = [
+        (msg, ts) for msg, ts in user_message_history[username]
+        if current_time - ts < SPAM_TIME_WINDOW
+    ]
+    
+    # Add current message
+    user_message_history[username].append((message, current_time))
+    
+    # Check if too many messages
+    if len(user_message_history[username]) > SPAM_MESSAGE_LIMIT:
+        return True
+    
+    # Check for repeated messages
+    recent_messages = [msg for msg, _ in user_message_history[username]]
+    if len(recent_messages) >= 3:
+        if recent_messages[-1] == recent_messages[-2] == recent_messages[-3]:
+            return True
+    
+    return False
+
+
+def check_message(username: str, message: str, user_role: str = "user") -> Dict[str, any]:
+    """
+    Main moderation check for a message.
+    
+    Args:
+        username: User who sent the message
+        message: Message content
+        user_role: User's role (pilot, copilot, mod, vip, user)
+    
+    Returns:
+        Dict with:
+        - is_allowed: bool
+        - violation: str or None
+        - action: str (delete, timeout, warn, allow)
+        - reason: str
+    """
+    if not ENABLE_AUTO_MOD:
+        return {"is_allowed": True, "violation": None, "action": "allow", "reason": None}
+    
+    # Moderators, pilots, and co-pilots bypass auto-mod
+    if user_role in ["pilot", "copilot", "mod", "vip"]:
+        return {"is_allowed": True, "violation": None, "action": "allow", "reason": "Trusted user"}
+    
+    # Check for links
+    if MOD_LINK_FILTER:
+        has_link, link = contains_link(message)
+        if has_link and not is_link_allowed(link):
+            return {
+                "is_allowed": False,
+                "violation": "unauthorized_link",
+                "action": "timeout" if username not in warned_users else "timeout",
+                "reason": f"Unauthorized link: {link}",
+                "duration": 60  # 60 second timeout
+            }
+    
+    # Check for excessive caps
+    if MOD_CAPS_FILTER:
+        if check_caps(message):
+            if username not in warned_users:
+                warned_users.add(username)
+                return {
+                    "is_allowed": False,
+                    "violation": "excessive_caps",
+                    "action": "warn",
+                    "reason": "Too many capital letters"
+                }
+            else:
+                return {
+                    "is_allowed": False,
+                    "violation": "excessive_caps",
+                    "action": "timeout",
+                    "reason": "Repeated caps spam",
+                    "duration": 30
+                }
+    
+    # Check for spam
+    if MOD_SPAM_FILTER:
+        if check_spam(username, message):
+            return {
+                "is_allowed": False,
+                "violation": "spam",
+                "action": "timeout",
+                "reason": "Message spam detected",
+                "duration": 120  # 2 minute timeout
+            }
+    
+    return {"is_allowed": True, "violation": None, "action": "allow", "reason": None}
+
+
+def execute_timeout(sock, channel: str, username: str, duration: int, reason: str):
+    """
+    Execute a timeout command via IRC.
+    
+    Args:
+        sock: IRC socket
+        channel: Channel name (e.g., "#devilmedlar")
+        username: User to timeout
+        duration: Duration in seconds
+        reason: Reason for timeout
+    """
+    timeout_cmd = f"/timeout {username} {duration} {reason}"
+    sock.send(f"PRIVMSG {channel} :{timeout_cmd}\r\n".encode("utf-8"))
+    
+    # Track timeout
+    timeout_history[username].append(time.time())
+    
+    print(f"[Mod] Timed out {username} for {duration}s: {reason}")
+
+
+def execute_ban(sock, channel: str, username: str, reason: str):
+    """Execute a ban command via IRC"""
+    ban_cmd = f"/ban {username} {reason}"
+    sock.send(f"PRIVMSG {channel} :{ban_cmd}\r\n".encode("utf-8"))
+    print(f"[Mod] Banned {username}: {reason}")
+
+
+def execute_delete(sock, channel: str, msg_id: str):
+    """Delete a specific message via IRC"""
+    delete_cmd = f"/delete {msg_id}"
+    sock.send(f"PRIVMSG {channel} :{delete_cmd}\r\n".encode("utf-8"))
+    print(f"[Mod] Deleted message: {msg_id}")
+
+
+def handle_mod_command(sock, channel: str, username: str, command: str, user_role: str) -> Optional[str]:
+    """
+    Handle moderation commands (!timeout, !ban, !warn, etc.)
+    
+    Args:
+        sock: IRC socket
+        channel: Channel name
+        username: User who issued command
+        command: Full command string
+        user_role: Role of user issuing command
+    
+    Returns:
+        Response message or None
+    """
+    # Only pilots, co-pilots, and mods can use mod commands
+    if user_role not in ["pilot", "copilot", "mod"]:
+        return f"@{username} You don't have permission to use mod commands."
+    
+    parts = command.split()
+    cmd = parts[0][1:].lower()  # Remove !
+    
+    if cmd == "timeout" and len(parts) >= 3:
+        target_user = parts[1].lstrip("@")
+        try:
+            duration = int(parts[2])
+            reason = " ".join(parts[3:]) if len(parts) > 3 else "Moderator timeout"
+            execute_timeout(sock, channel, target_user, duration, reason)
+            return f"@{username} Timed out {target_user} for {duration} seconds."
+        except ValueError:
+            return f"@{username} Usage: !timeout username seconds [reason]"
+    
+    elif cmd == "ban" and len(parts) >= 2:
+        target_user = parts[1].lstrip("@")
+        reason = " ".join(parts[2:]) if len(parts) > 2 else "Moderator ban"
+        execute_ban(sock, channel, target_user, reason)
+        return f"@{username} Banned {target_user}."
+    
+    elif cmd == "warn" and len(parts) >= 2:
+        target_user = parts[1].lstrip("@")
+        warned_users.add(target_user)
+        return f"@{target_user} Warning from moderators. Please follow chat rules."
+    
+    elif cmd == "unwarn" and len(parts) >= 2:
+        target_user = parts[1].lstrip("@")
+        if target_user in warned_users:
+            warned_users.remove(target_user)
+            return f"@{username} Removed warning for {target_user}."
+        return f"@{username} {target_user} has no warnings."
+    
+    elif cmd == "whitelist" and len(parts) >= 2:
+        domain = parts[1]
+        whitelist = load_link_whitelist()
+        if domain not in whitelist:
+            whitelist.append(domain)
+            with open(LINK_WHITELIST_FILE, 'w') as f:
+                yaml.safe_dump({"whitelist": whitelist}, f)
+            return f"@{username} Added {domain} to whitelist."
+        return f"@{username} {domain} is already whitelisted."
+    
+    elif cmd == "modstats":
+        total_warnings = len(warned_users)
+        total_timeouts = sum(len(v) for v in timeout_history.values())
+        return f"@{username} Mod Stats: {total_warnings} warnings, {total_timeouts} timeouts"
+    
+    return None
+
+
+def is_mod_command(message: str) -> bool:
+    """Check if message is a moderation command"""
+    mod_commands = ["!timeout", "!ban", "!warn", "!unwarn", "!whitelist", "!modstats"]
+    return any(message.lower().startswith(cmd) for cmd in mod_commands)
+
+
+def get_user_timeout_count(username: str, hours: int = 24) -> int:
+    """Get number of times user has been timed out in last N hours"""
+    cutoff = time.time() - (hours * 3600)
+    return sum(1 for ts in timeout_history[username] if ts > cutoff)
+
+
+# Example usage and testing
+if __name__ == "__main__":
+    print("=" * 60)
+    print("MedlarTV Moderation Module - Testing")
+    print("=" * 60)
+    
+    test_cases = [
+        ("user1", "Check out my site at sketchy-site.com", "user"),
+        ("user2", "HELLO EVERYONE THIS IS ALL CAPS!!!", "user"),
+        ("user3", "spam spam spam spam spam", "user"),
+        ("pilot", "https://sketchy-site.com", "pilot"),
+        ("user4", "Normal message", "user"),
+        ("user5", "Check out this clip: https://clips.twitch.tv/abc123", "user"),
+    ]
+    
+    print("\n--- Moderation Checks ---")
+    for username, message, role in test_cases:
+        result = check_message(username, message, role)
+        print(f"\nUser: {username} ({role})")
+        print(f"Message: {message}")
+        print(f"Result: {result['action']} - {result['reason'] or 'Allowed'}")
+    
+    print("\n--- Spam Detection Test ---")
+    for i in range(6):
+        result = check_message("spammer", f"spam message {i}", "user")
+        print(f"Message {i+1}: {result['action']}")
+
+
+================================================================================
+FILE: MedlarTV/core/response_templates.py
+================================================================================
+
+"""
+MedlarTV Response Templates
+Reduces repetitive responses with template variations
+"""
+
+import os
+import random
+import yaml
+from pathlib import Path
+from typing import List, Dict, Optional
+
+# Check if templates are enabled
+ENABLE_TEMPLATES = os.getenv("ENABLE_RESPONSE_TEMPLATES", "true").lower() == "true"
+MIN_VARIATION = int(os.getenv("MIN_TEMPLATE_VARIATION", "3"))
+
+# Track recently used templates to avoid repetition
+recent_templates = {
+    "greeting": [],
+    "agreement": [],
+    "hype": [],
+    "support": [],
+    "sarcastic": []
+}
+
+
+def load_templates() -> Dict[str, List[str]]:
+    """Load response templates from personality.yaml"""
+    config_path = Path("MedlarTV/config/personality.yaml")
+    
+    if not config_path.exists():
+        return {}
+    
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f) or {}
+        
+        personality = config.get("personality", {})
+        return personality.get("response_templates", {})
+    except Exception as e:
+        print(f"[Templates] Error loading templates: {e}")
+        return {}
+
+
+def get_template(template_type: str, username: str = None, emoji: str = None, avoid_recent: bool = True) -> Optional[str]:
+    """
+    Get a response template with variation.
+    
+    Args:
+        template_type: Type of template (greeting, agreement, hype, etc.)
+        username: Username to insert into template
+        emoji: Emoji to insert into template
+        avoid_recent: If True, avoid recently used templates
+    
+    Returns:
+        Formatted template string, or None if not found
+    """
+    if not ENABLE_TEMPLATES:
+        return None
+    
+    templates = load_templates()
+    
+    if template_type not in templates:
+        return None
+    
+    available_templates = templates[template_type]
+    
+    if not available_templates:
+        return None
+    
+    # Filter out recently used templates
+    if avoid_recent and template_type in recent_templates:
+        recent = recent_templates[template_type]
+        if len(recent) < len(available_templates):
+            available = [t for t in available_templates if t not in recent]
+            if available:
+                available_templates = available
+    
+    # Select random template
+    template = random.choice(available_templates)
+    
+    # Track usage
+    if template_type in recent_templates:
+        recent_templates[template_type].append(template)
+        # Keep only last MIN_VARIATION templates
+        if len(recent_templates[template_type]) > MIN_VARIATION:
+            recent_templates[template_type].pop(0)
+    
+    # Format template
+    if username:
+        template = template.replace("{user}", username)
+    
+    if emoji:
+        template = template.replace("{emoji}", emoji)
+    
+    return template
+
+
+def get_greeting(username: str, emoji: str = "👋") -> str:
+    """Get a varied greeting"""
+    template = get_template("greeting", username, emoji)
+    return template if template else f"Hey {username}! {emoji}"
+
+
+def get_agreement(username: str = None, emoji: str = "💯") -> str:
+    """Get a varied agreement response"""
+    template = get_template("agreement", username, emoji)
+    return template if template else f"Absolutely! {emoji}"
+
+
+def get_hype(username: str = None, emoji: str = "🔥") -> str:
+    """Get a varied hype response"""
+    template = get_template("hype", username, emoji)
+    return template if template else f"LET'S GOOOO! {emoji}"
+
+
+def get_support(username: str, emoji: str = "💖") -> str:
+    """Get a varied supportive response"""
+    template = get_template("support", username, emoji)
+    return template if template else f"You got this, {username}! {emoji}"
+
+
+def get_sarcastic(username: str = None, emoji: str = "😏") -> str:
+    """Get a varied sarcastic response"""
+    template = get_template("sarcastic", username, emoji)
+    return template if template else f"Oh really? {emoji}"
+
+
+def detect_template_type(message: str, mood: str = "chill") -> Optional[str]:
+    """
+    Automatically detect which template type to use based on message content and mood.
+    
+    Args:
+        message: User's message
+        mood: Current bot mood
+    
+    Returns:
+        Template type to use, or None
+    """
+    message_lower = message.lower()
+    
+    # Greeting detection
+    greetings = ["hi", "hello", "hey", "yo", "sup", "what's up", "whats up", "howdy"]
+    if any(g in message_lower.split() for g in greetings):
+        return "greeting"
+    
+    # Agreement detection
+    agreements = ["agree", "true", "facts", "exactly", "right", "yes", "yep", "yeah"]
+    if any(a in message_lower for a in agreements):
+        return "agreement"
+    
+    # Hype detection (or if mood is hype)
+    hype_words = ["hype", "let's go", "lets go", "pog", "amazing", "awesome", "incredible"]
+    if mood == "hype" or any(h in message_lower for h in hype_words):
+        return "hype"
+    
+    # Support detection
+    support_words = ["help", "sad", "tired", "struggling", "hard", "difficult", "need"]
+    if any(s in message_lower for s in support_words):
+        return "support"
+    
+    # Sarcastic detection (or if mood is snarky)
+    sarcastic_words = ["sure", "whatever", "ok", "really", "lol", "lmao"]
+    if mood == "snarky" or any(s in message_lower for s in sarcastic_words):
+        return "sarcastic"
+    
+    return None
+
+
+def get_smart_response(message: str, username: str, mood: str = "chill", emoji: str = None) -> Optional[str]:
+    """
+    Intelligently select and return a template-based response.
+    
+    Args:
+        message: User's message
+        username: User's username
+        mood: Current bot mood
+        emoji: Optional emoji to use
+    
+    Returns:
+        Template response, or None if no suitable template
+    """
+    template_type = detect_template_type(message, mood)
+    
+    if not template_type:
+        return None
+    
+    if emoji is None:
+        # Select emoji based on mood
+        mood_emojis = {
+            "hype": "🔥",
+            "chill": "😌",
+            "snarky": "😏",
+            "supportive": "💖"
+        }
+        emoji = mood_emojis.get(mood, "💬")
+    
+    return get_template(template_type, username, emoji)
+
+
+# Example usage and testing
+if __name__ == "__main__":
+    print("=" * 60)
+    print("MedlarTV Response Templates - Testing")
+    print("=" * 60)
+    
+    test_cases = [
+        ("hey", "User1", "chill"),
+        ("I totally agree", "User2", "chill"),
+        ("let's gooo!", "User3", "hype"),
+        ("I'm feeling sad", "User4", "supportive"),
+        ("sure buddy", "User5", "snarky")
+    ]
+    
+    print("\n--- Smart Response Detection ---")
+    for message, username, mood in test_cases:
+        response = get_smart_response(message, username, mood)
+        print(f"\nUser: {message}")
+        print(f"Mood: {mood}")
+        print(f"Bot: {response}")
+    
+    print("\n--- Template Variation Test (5 greetings) ---")
+    for i in range(5):
+        greeting = get_greeting(f"User{i+1}")
+        print(f"{i+1}. {greeting}")
+    
+    print("\n--- Template Types ---")
+    print("Greeting:", get_greeting("TestUser"))
+    print("Agreement:", get_agreement("TestUser"))
+    print("Hype:", get_hype("TestUser"))
+    print("Support:", get_support("TestUser"))
+    print("Sarcastic:", get_sarcastic("TestUser"))
+
+
+================================================================================
 FILE: MedlarTV/core/sentiment.py
 ================================================================================
 
@@ -2232,6 +3456,1076 @@ def analyze_sentiment(message: str) -> float:
             score *= 1.5
     # clamp between -1 and 1
     return max(-1.0, min(1.0, score / 5))
+
+
+================================================================================
+FILE: MedlarTV/core/stream_management.py
+================================================================================
+
+"""
+MedlarTV Stream Management Module
+Twitch API integration for changing title, category, reading stream info, etc.
+"""
+
+import os
+import requests
+from typing import Optional, Dict, List
+from datetime import datetime, timedelta
+
+# Twitch API credentials
+TWITCH_CLIENT_ID = os.getenv("TWITCH_CLIENT_ID", "")
+TWITCH_CLIENT_SECRET = os.getenv("TWITCH_CLIENT_SECRET", "")
+TWITCH_CHANNEL = os.getenv("TWITCH_CHANNEL", "").lstrip("#")
+
+# API endpoints
+TWITCH_API_BASE = "https://api.twitch.tv/helix"
+TWITCH_AUTH_URL = "https://id.twitch.tv/oauth2/token"
+
+# Cache
+_access_token = None
+_token_expires_at = None
+_broadcaster_id = None
+
+
+def get_access_token() -> Optional[str]:
+    """Get or refresh OAuth access token for Twitch API"""
+    global _access_token, _token_expires_at
+    
+    # Return cached token if still valid
+    if _access_token and _token_expires_at and datetime.now() < _token_expires_at:
+        return _access_token
+    
+    if not TWITCH_CLIENT_ID or not TWITCH_CLIENT_SECRET:
+        print("[Stream] Missing Twitch API credentials in .env")
+        return None
+    
+    try:
+        response = requests.post(TWITCH_AUTH_URL, params={
+            "client_id": TWITCH_CLIENT_ID,
+            "client_secret": TWITCH_CLIENT_SECRET,
+            "grant_type": "client_credentials"
+        })
+        
+        if response.status_code == 200:
+            data = response.json()
+            _access_token = data["access_token"]
+            expires_in = data["expires_in"]
+            _token_expires_at = datetime.now() + timedelta(seconds=expires_in - 300)  # 5 min buffer
+            print("[Stream] Got new access token")
+            return _access_token
+        else:
+            print(f"[Stream] Failed to get access token: {response.status_code}")
+            return None
+            
+    except Exception as e:
+        print(f"[Stream] Error getting access token: {e}")
+        return None
+
+
+def get_broadcaster_id() -> Optional[str]:
+    """Get broadcaster ID for the configured channel"""
+    global _broadcaster_id
+    
+    if _broadcaster_id:
+        return _broadcaster_id
+    
+    token = get_access_token()
+    if not token:
+        return None
+    
+    try:
+        headers = {
+            "Client-ID": TWITCH_CLIENT_ID,
+            "Authorization": f"Bearer {token}"
+        }
+        
+        response = requests.get(
+            f"{TWITCH_API_BASE}/users",
+            headers=headers,
+            params={"login": TWITCH_CHANNEL}
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            if data["data"]:
+                _broadcaster_id = data["data"][0]["id"]
+                print(f"[Stream] Got broadcaster ID: {_broadcaster_id}")
+                return _broadcaster_id
+        
+        print(f"[Stream] Failed to get broadcaster ID: {response.status_code}")
+        return None
+        
+    except Exception as e:
+        print(f"[Stream] Error getting broadcaster ID: {e}")
+        return None
+
+
+def get_stream_info() -> Optional[Dict]:
+    """
+    Get current stream information (title, category, viewer count, etc.)
+    
+    Returns:
+        Dict with stream info or None if offline/error
+    """
+    token = get_access_token()
+    broadcaster_id = get_broadcaster_id()
+    
+    if not token or not broadcaster_id:
+        return None
+    
+    try:
+        headers = {
+            "Client-ID": TWITCH_CLIENT_ID,
+            "Authorization": f"Bearer {token}"
+        }
+        
+        response = requests.get(
+            f"{TWITCH_API_BASE}/streams",
+            headers=headers,
+            params={"user_id": broadcaster_id}
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            if data["data"]:
+                stream = data["data"][0]
+                return {
+                    "is_live": True,
+                    "title": stream["title"],
+                    "game_name": stream["game_name"],
+                    "game_id": stream["game_id"],
+                    "viewer_count": stream["viewer_count"],
+                    "started_at": stream["started_at"],
+                    "language": stream["language"],
+                    "thumbnail_url": stream["thumbnail_url"]
+                }
+            else:
+                return {"is_live": False}
+        
+        print(f"[Stream] Failed to get stream info: {response.status_code}")
+        return None
+        
+    except Exception as e:
+        print(f"[Stream] Error getting stream info: {e}")
+        return None
+
+
+def get_channel_info() -> Optional[Dict]:
+    """
+    Get channel information (always available, even when offline)
+    
+    Returns:
+        Dict with channel info
+    """
+    token = get_access_token()
+    broadcaster_id = get_broadcaster_id()
+    
+    if not token or not broadcaster_id:
+        return None
+    
+    try:
+        headers = {
+            "Client-ID": TWITCH_CLIENT_ID,
+            "Authorization": f"Bearer {token}"
+        }
+        
+        response = requests.get(
+            f"{TWITCH_API_BASE}/channels",
+            headers=headers,
+            params={"broadcaster_id": broadcaster_id}
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            if data["data"]:
+                channel = data["data"][0]
+                return {
+                    "broadcaster_name": channel["broadcaster_name"],
+                    "broadcaster_language": channel["broadcaster_language"],
+                    "game_name": channel["game_name"],
+                    "game_id": channel["game_id"],
+                    "title": channel["title"],
+                    "delay": channel.get("delay", 0)
+                }
+        
+        print(f"[Stream] Failed to get channel info: {response.status_code}")
+        return None
+        
+    except Exception as e:
+        print(f"[Stream] Error getting channel info: {e}")
+        return None
+
+
+def update_stream_title(new_title: str) -> bool:
+    """
+    Update the stream title
+    
+    Args:
+        new_title: New stream title (max 140 characters)
+    
+    Returns:
+        True if successful
+    """
+    token = get_access_token()
+    broadcaster_id = get_broadcaster_id()
+    
+    if not token or not broadcaster_id:
+        return False
+    
+    # Truncate title if too long
+    if len(new_title) > 140:
+        new_title = new_title[:137] + "..."
+    
+    try:
+        headers = {
+            "Client-ID": TWITCH_CLIENT_ID,
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        response = requests.patch(
+            f"{TWITCH_API_BASE}/channels",
+            headers=headers,
+            params={"broadcaster_id": broadcaster_id},
+            json={"title": new_title}
+        )
+        
+        if response.status_code == 204:
+            print(f"[Stream] Updated title to: {new_title}")
+            return True
+        
+        print(f"[Stream] Failed to update title: {response.status_code}")
+        return False
+        
+    except Exception as e:
+        print(f"[Stream] Error updating title: {e}")
+        return False
+
+
+def update_stream_category(game_name: str) -> bool:
+    """
+    Update the stream category/game
+    
+    Args:
+        game_name: Name of the game/category
+    
+    Returns:
+        True if successful
+    """
+    token = get_access_token()
+    broadcaster_id = get_broadcaster_id()
+    
+    if not token or not broadcaster_id:
+        return False
+    
+    # First, get the game ID
+    game_id = search_game(game_name)
+    if not game_id:
+        print(f"[Stream] Game not found: {game_name}")
+        return False
+    
+    try:
+        headers = {
+            "Client-ID": TWITCH_CLIENT_ID,
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        response = requests.patch(
+            f"{TWITCH_API_BASE}/channels",
+            headers=headers,
+            params={"broadcaster_id": broadcaster_id},
+            json={"game_id": game_id}
+        )
+        
+        if response.status_code == 204:
+            print(f"[Stream] Updated category to: {game_name}")
+            return True
+        
+        print(f"[Stream] Failed to update category: {response.status_code}")
+        return False
+        
+    except Exception as e:
+        print(f"[Stream] Error updating category: {e}")
+        return False
+
+
+def search_game(game_name: str) -> Optional[str]:
+    """
+    Search for a game by name and return its ID
+    
+    Args:
+        game_name: Name of the game to search
+    
+    Returns:
+        Game ID or None
+    """
+    token = get_access_token()
+    if not token:
+        return None
+    
+    try:
+        headers = {
+            "Client-ID": TWITCH_CLIENT_ID,
+            "Authorization": f"Bearer {token}"
+        }
+        
+        response = requests.get(
+            f"{TWITCH_API_BASE}/games",
+            headers=headers,
+            params={"name": game_name}
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            if data["data"]:
+                return data["data"][0]["id"]
+        
+        return None
+        
+    except Exception as e:
+        print(f"[Stream] Error searching game: {e}")
+        return None
+
+
+def get_top_games(limit: int = 10) -> List[Dict]:
+    """Get list of top games on Twitch"""
+    token = get_access_token()
+    if not token:
+        return []
+    
+    try:
+        headers = {
+            "Client-ID": TWITCH_CLIENT_ID,
+            "Authorization": f"Bearer {token}"
+        }
+        
+        response = requests.get(
+            f"{TWITCH_API_BASE}/games/top",
+            headers=headers,
+            params={"first": limit}
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            return [
+                {
+                    "name": game["name"],
+                    "id": game["id"]
+                }
+                for game in data["data"]
+            ]
+        
+        return []
+        
+    except Exception as e:
+        print(f"[Stream] Error getting top games: {e}")
+        return []
+
+
+def format_stream_info(info: Dict) -> str:
+    """Format stream info for chat display"""
+    if not info:
+        return "Could not retrieve stream info."
+    
+    if not info.get("is_live", False):
+        # Show channel info even when offline
+        channel = get_channel_info()
+        if channel:
+            return f"📺 Stream is OFFLINE | Title: {channel['title']} | Category: {channel['game_name']}"
+        return "📺 Stream is currently offline."
+    
+    title = info["title"]
+    game = info["game_name"]
+    viewers = info["viewer_count"]
+    
+    # Calculate uptime
+    started_at = datetime.fromisoformat(info["started_at"].replace("Z", "+00:00"))
+    uptime = datetime.now().astimezone() - started_at
+    hours = int(uptime.total_seconds() // 3600)
+    minutes = int((uptime.total_seconds() % 3600) // 60)
+    
+    return f"🔴 LIVE | {title} | {game} | 👥 {viewers} viewers | ⏱️ {hours}h {minutes}m"
+
+
+# Example usage and testing
+if __name__ == "__main__":
+    print("=" * 60)
+    print("MedlarTV Stream Management - Testing")
+    print("=" * 60)
+    
+    print("\n--- Getting Access Token ---")
+    token = get_access_token()
+    print(f"Token: {token[:20] if token else 'None'}...")
+    
+    print("\n--- Getting Broadcaster ID ---")
+    broadcaster_id = get_broadcaster_id()
+    print(f"Broadcaster ID: {broadcaster_id}")
+    
+    print("\n--- Getting Stream Info ---")
+    stream_info = get_stream_info()
+    if stream_info:
+        print(format_stream_info(stream_info))
+    else:
+        print("No stream info available")
+    
+    print("\n--- Getting Channel Info ---")
+    channel_info = get_channel_info()
+    if channel_info:
+        print(f"Channel: {channel_info['broadcaster_name']}")
+        print(f"Title: {channel_info['title']}")
+        print(f"Game: {channel_info['game_name']}")
+    
+    print("\n--- Searching for Games ---")
+    test_games = ["Minecraft", "Just Chatting", "League of Legends"]
+    for game in test_games:
+        game_id = search_game(game)
+        print(f"{game}: {game_id}")
+    
+    print("\n--- Top Games ---")
+    top_games = get_top_games(5)
+    for i, game in enumerate(top_games, 1):
+        print(f"{i}. {game['name']}")
+
+
+================================================================================
+FILE: MedlarTV/core/translation.py
+================================================================================
+
+"""
+MedlarTV Translation Module
+Multi-language support with automatic detection
+"""
+
+import os
+import re
+from typing import Optional, Dict
+from pathlib import Path
+import yaml
+
+# Check if translation is enabled
+ENABLE_TRANSLATION = os.getenv("ENABLE_TRANSLATION", "true").lower() == "true"
+DEFAULT_LANGUAGE = os.getenv("DEFAULT_LANGUAGE", "en")
+SUPPORTED_LANGUAGES = os.getenv("SUPPORTED_LANGUAGES", "en,es,fr,de,ja,ko,pt").split(",")
+
+
+def load_translations() -> Dict:
+    """Load translations from personality.yaml"""
+    config_path = Path("MedlarTV/config/personality.yaml")
+    
+    if not config_path.exists():
+        return {}
+    
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f) or {}
+        
+        personality = config.get("personality", {})
+        return personality.get("translations", {})
+    except Exception as e:
+        print(f"[Translation] Error loading translations: {e}")
+        return {}
+
+
+def detect_language(text: str) -> str:
+    """
+    Simple language detection based on character sets.
+    For production, consider using langdetect library.
+    """
+    if not ENABLE_TRANSLATION:
+        return DEFAULT_LANGUAGE
+    
+    # Japanese characters
+    if re.search(r'[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]', text):
+        return "ja"
+    
+    # Korean characters
+    if re.search(r'[\uAC00-\uD7A3]', text):
+        return "ko"
+    
+    # Chinese characters (simplified/traditional)
+    if re.search(r'[\u4E00-\u9FFF]', text):
+        return "zh"
+    
+    # Cyrillic (Russian, etc.)
+    if re.search(r'[\u0400-\u04FF]', text):
+        return "ru"
+    
+    # Spanish indicators
+    spanish_words = ['hola', 'gracias', 'por favor', 'buenos', 'días', 'sí', 'no', 'qué']
+    if any(word in text.lower() for word in spanish_words):
+        return "es"
+    
+    # French indicators
+    french_words = ['bonjour', 'merci', 'oui', 'non', 'ça', 'très', 'être']
+    if any(word in text.lower() for word in french_words):
+        return "fr"
+    
+    # German indicators
+    german_words = ['hallo', 'danke', 'bitte', 'ja', 'nein', 'wie', 'ist', 'der', 'die', 'das']
+    if any(word in text.lower() for word in german_words):
+        return "de"
+    
+    # Portuguese indicators
+    portuguese_words = ['olá', 'obrigado', 'por favor', 'sim', 'não', 'está']
+    if any(word in text.lower() for word in portuguese_words):
+        return "pt"
+    
+    # Default to English
+    return DEFAULT_LANGUAGE
+
+
+def translate_phrase(phrase_key: str, target_language: str = None) -> str:
+    """
+    Translate a common phrase to target language.
+    
+    Args:
+        phrase_key: Key for the phrase (e.g., 'greeting', 'thanks', 'bye')
+        target_language: Target language code (e.g., 'es', 'fr', 'ja')
+    
+    Returns:
+        Translated phrase, or original if translation not available
+    """
+    if not ENABLE_TRANSLATION:
+        return phrase_key
+    
+    if target_language is None:
+        target_language = DEFAULT_LANGUAGE
+    
+    if target_language not in SUPPORTED_LANGUAGES:
+        target_language = DEFAULT_LANGUAGE
+    
+    translations = load_translations()
+    
+    if phrase_key not in translations:
+        return phrase_key
+    
+    phrase_translations = translations[phrase_key]
+    
+    if target_language not in phrase_translations:
+        return phrase_translations.get(DEFAULT_LANGUAGE, phrase_key)
+    
+    return phrase_translations[target_language]
+
+
+def translate_message(text: str, target_language: str = None) -> str:
+    """
+    Translate a full message to target language.
+    Note: This is a placeholder. For real translation, integrate an API like:
+    - Google Translate API
+    - DeepL API
+    - LibreTranslate (free/open source)
+    """
+    if not ENABLE_TRANSLATION:
+        return text
+    
+    if target_language is None:
+        target_language = DEFAULT_LANGUAGE
+    
+    # For now, just return original text
+    # In production, call translation API here
+    print(f"[Translation] Would translate '{text}' to {target_language}")
+    return text
+
+
+def add_language_indicator(text: str, language: str) -> str:
+    """Add a small language flag emoji to responses"""
+    if not ENABLE_TRANSLATION or language == DEFAULT_LANGUAGE:
+        return text
+    
+    flags = {
+        "es": "🇪🇸",
+        "fr": "🇫🇷",
+        "de": "🇩🇪",
+        "ja": "🇯🇵",
+        "ko": "🇰🇷",
+        "pt": "🇵🇹",
+        "ru": "🇷🇺",
+        "zh": "🇨🇳"
+    }
+    
+    flag = flags.get(language, "")
+    if flag:
+        return f"{flag} {text}"
+    return text
+
+
+def get_multilingual_greeting(username: str, language: str = None) -> str:
+    """Get a greeting in the user's language"""
+    if language is None:
+        language = DEFAULT_LANGUAGE
+    
+    greeting = translate_phrase("greeting", language)
+    return f"{greeting} {username}!"
+
+
+def get_multilingual_thanks(language: str = None) -> str:
+    """Get a thank you message in the user's language"""
+    if language is None:
+        language = DEFAULT_LANGUAGE
+    
+    return translate_phrase("thanks", language)
+
+
+# Example usage and testing
+if __name__ == "__main__":
+    print("=" * 60)
+    print("MedlarTV Translation Module - Testing")
+    print("=" * 60)
+    
+    test_messages = [
+        "Hello, how are you?",
+        "Hola, ¿cómo estás?",
+        "Bonjour, comment allez-vous?",
+        "こんにちは、元気ですか？",
+        "안녕하세요, 어떻게 지내세요?",
+        "Olá, como vai?"
+    ]
+    
+    print("\n--- Language Detection ---")
+    for msg in test_messages:
+        lang = detect_language(msg)
+        print(f"{lang}: {msg}")
+    
+    print("\n--- Phrase Translation ---")
+    for lang in SUPPORTED_LANGUAGES:
+        greeting = translate_phrase("greeting", lang)
+        thanks = translate_phrase("thanks", lang)
+        print(f"{lang}: {greeting} / {thanks}")
+    
+    print("\n--- Multilingual Greetings ---")
+    for lang in SUPPORTED_LANGUAGES:
+        greeting = get_multilingual_greeting("User123", lang)
+        print(f"{lang}: {greeting}")
+
+
+================================================================================
+FILE: MedlarTV/core/twitch_events.py
+================================================================================
+
+"""
+MedlarTV Twitch Events Module
+Detects and responds to raids, subs, channel points, and uses Twitch emotes
+"""
+
+import os
+import re
+import random
+import requests
+from typing import Optional, Dict, List, Tuple
+from datetime import datetime
+
+# Feature flags
+ENABLE_RAID_DETECTION = os.getenv("ENABLE_RAID_DETECTION", "true").lower() == "true"
+ENABLE_SUB_DETECTION = os.getenv("ENABLE_SUB_DETECTION", "true").lower() == "true"
+ENABLE_CHANNEL_POINTS = os.getenv("ENABLE_CHANNEL_POINTS", "true").lower() == "true"
+ENABLE_EMOTE_RESPONSES = os.getenv("ENABLE_EMOTE_RESPONSES", "true").lower() == "true"
+
+# Twitch API
+TWITCH_CLIENT_ID = os.getenv("TWITCH_CLIENT_ID", "")
+TWITCH_API_BASE = "https://api.twitch.tv/helix"
+
+# Emote cache
+_global_emotes = None
+_channel_emotes = None
+
+
+def detect_raid(irc_message: str) -> Optional[Dict]:
+    """
+    Detect raid from IRC message.
+    
+    IRC Format: @msg-id=raid :tmi.twitch.tv USERNOTICE #channel
+    
+    Returns:
+        Dict with raid info or None
+    """
+    if not ENABLE_RAID_DETECTION:
+        return None
+    
+    if "msg-id=raid" not in irc_message:
+        return None
+    
+    try:
+        # Extract raid info from tags
+        tags = {}
+        if irc_message.startswith("@"):
+            tag_str = irc_message.split(" ", 1)[0][1:]
+            for tag in tag_str.split(";"):
+                if "=" in tag:
+                    key, value = tag.split("=", 1)
+                    tags[key] = value
+        
+        if "msg-param-viewerCount" in tags and "msg-param-displayName" in tags:
+            return {
+                "type": "raid",
+                "raider": tags["msg-param-displayName"],
+                "viewer_count": int(tags["msg-param-viewerCount"]),
+                "timestamp": datetime.now().isoformat()
+            }
+    except Exception as e:
+        print(f"[Events] Error parsing raid: {e}")
+    
+    return None
+
+
+def detect_subscription(irc_message: str) -> Optional[Dict]:
+    """
+    Detect subscription/resub from IRC message.
+    
+    IRC Format: @msg-id=sub/resub/subgift :tmi.twitch.tv USERNOTICE #channel
+    
+    Returns:
+        Dict with sub info or None
+    """
+    if not ENABLE_SUB_DETECTION:
+        return None
+    
+    sub_types = ["msg-id=sub", "msg-id=resub", "msg-id=subgift", "msg-id=submysterygift"]
+    if not any(st in irc_message for st in sub_types):
+        return None
+    
+    try:
+        # Extract sub info from tags
+        tags = {}
+        if irc_message.startswith("@"):
+            tag_str = irc_message.split(" ", 1)[0][1:]
+            for tag in tag_str.split(";"):
+                if "=" in tag:
+                    key, value = tag.split("=", 1)
+                    tags[key] = value
+        
+        msg_id = tags.get("msg-id", "")
+        
+        if msg_id in ["sub", "resub"]:
+            return {
+                "type": "subscription",
+                "sub_type": msg_id,
+                "subscriber": tags.get("display-name", tags.get("login", "Unknown")),
+                "months": int(tags.get("msg-param-cumulative-months", 1)),
+                "tier": tags.get("msg-param-sub-plan", "1000"),
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        elif msg_id == "subgift":
+            return {
+                "type": "gift_subscription",
+                "gifter": tags.get("display-name", "Anonymous"),
+                "recipient": tags.get("msg-param-recipient-display-name", "Unknown"),
+                "months": int(tags.get("msg-param-months", 1)),
+                "tier": tags.get("msg-param-sub-plan", "1000"),
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        elif msg_id == "submysterygift":
+            return {
+                "type": "mystery_gift",
+                "gifter": tags.get("display-name", "Anonymous"),
+                "count": int(tags.get("msg-param-sender-count", 1)),
+                "tier": tags.get("msg-param-sub-plan", "1000"),
+                "timestamp": datetime.now().isoformat()
+            }
+    
+    except Exception as e:
+        print(f"[Events] Error parsing subscription: {e}")
+    
+    return None
+
+
+def detect_channel_point_redemption(irc_message: str) -> Optional[Dict]:
+    """
+    Detect channel point redemption from IRC message.
+    
+    IRC Format: @msg-id=reward-redeemed :tmi.twitch.tv USERNOTICE #channel
+    
+    Returns:
+        Dict with redemption info or None
+    """
+    if not ENABLE_CHANNEL_POINTS:
+        return None
+    
+    if "msg-id=reward-redeemed" not in irc_message:
+        return None
+    
+    try:
+        tags = {}
+        if irc_message.startswith("@"):
+            tag_str = irc_message.split(" ", 1)[0][1:]
+            for tag in tag_str.split(";"):
+                if "=" in tag:
+                    key, value = tag.split("=", 1)
+                    tags[key] = value
+        
+        return {
+            "type": "channel_points",
+            "user": tags.get("display-name", "Unknown"),
+            "reward_id": tags.get("custom-reward-id", ""),
+            "reward_title": tags.get("msg-param-reward-title", ""),
+            "reward_cost": int(tags.get("msg-param-reward-cost", 0)),
+            "user_input": tags.get("msg-param-user-input", ""),
+            "timestamp": datetime.now().isoformat()
+        }
+    
+    except Exception as e:
+        print(f"[Events] Error parsing channel points: {e}")
+    
+    return None
+
+
+def detect_bits(irc_message: str) -> Optional[Dict]:
+    """
+    Detect bits/cheering from IRC message.
+    
+    Returns:
+        Dict with bits info or None
+    """
+    if "bits=" not in irc_message.lower():
+        return None
+    
+    try:
+        tags = {}
+        if irc_message.startswith("@"):
+            tag_str = irc_message.split(" ", 1)[0][1:]
+            for tag in tag_str.split(";"):
+                if "=" in tag:
+                    key, value = tag.split("=", 1)
+                    tags[key] = value
+        
+        if "bits" in tags:
+            return {
+                "type": "bits",
+                "user": tags.get("display-name", "Unknown"),
+                "amount": int(tags.get("bits", 0)),
+                "timestamp": datetime.now().isoformat()
+            }
+    
+    except Exception as e:
+        print(f"[Events] Error parsing bits: {e}")
+    
+    return None
+
+
+def get_raid_response(raid_info: Dict) -> str:
+    """Generate response for raid"""
+    raider = raid_info["raider"]
+    viewers = raid_info["viewer_count"]
+    
+    responses = [
+        f"🚨 RAID ALERT! 🚨 Welcome {raider} and {viewers} raiders! PogChamp",
+        f"⚡ {raider} just raided with {viewers} viewers! LET'S GOOO! 🔥",
+        f"🎉 HUGE raid from {raider}! Welcome {viewers} new friends! devilmeGODMODE",
+        f"💥 {raider} brought {viewers} raiders! Thank you so much! 💖",
+    ]
+    
+    return random.choice(responses)
+
+
+def get_sub_response(sub_info: Dict) -> str:
+    """Generate response for subscription"""
+    if sub_info["type"] == "subscription":
+        subscriber = sub_info["subscriber"]
+        months = sub_info["months"]
+        
+        if months == 1:
+            responses = [
+                f"🎉 Welcome to the squad, {subscriber}! Thanks for the sub! 💖",
+                f"⭐ {subscriber} just subscribed! You're awesome! devilmeGODMODE",
+                f"🔥 NEW SUB HYPE! Thanks {subscriber}! PogChamp",
+            ]
+        else:
+            responses = [
+                f"🎊 {subscriber} resubbed for {months} months! Legend! 👑",
+                f"💖 {months} MONTHS! Thanks for the continued support, {subscriber}!",
+                f"⚡ {subscriber} has been here for {months} months! Absolute legend! 🔥",
+            ]
+        
+        return random.choice(responses)
+    
+    elif sub_info["type"] == "gift_subscription":
+        gifter = sub_info["gifter"]
+        recipient = sub_info["recipient"]
+        
+        responses = [
+            f"🎁 {gifter} just gifted a sub to {recipient}! So generous! 💖",
+            f"⭐ Gift sub from {gifter} to {recipient}! Amazing! PogChamp",
+            f"💝 {gifter} spreading the love with a gift sub for {recipient}! 🔥",
+        ]
+        
+        return random.choice(responses)
+    
+    elif sub_info["type"] == "mystery_gift":
+        gifter = sub_info["gifter"]
+        count = sub_info["count"]
+        
+        responses = [
+            f"🎁✨ {gifter} just gifted {count} subs! LEGENDARY! 👑",
+            f"💖 MASSIVE gift sub bomb from {gifter}! {count} subs! devilmeGODMODE",
+            f"🚀 {gifter} is going CRAZY with {count} gift subs! Thank you! 🔥",
+        ]
+        
+        return random.choice(responses)
+    
+    return f"Thanks for the sub! 💖"
+
+
+def get_channel_point_response(redemption_info: Dict) -> str:
+    """Generate response for channel point redemption"""
+    user = redemption_info["user"]
+    reward = redemption_info["reward_title"]
+    
+    return f"⭐ {user} redeemed: {reward}! Thanks for using your points! 💖"
+
+
+def get_bits_response(bits_info: Dict) -> str:
+    """Generate response for bits/cheering"""
+    user = bits_info["user"]
+    amount = bits_info["amount"]
+    
+    if amount >= 1000:
+        return f"💎 HUGE CHEER! {user} just dropped {amount} bits! You're amazing! 🔥"
+    elif amount >= 100:
+        return f"⭐ {user} cheered {amount} bits! Thank you so much! PogChamp"
+    else:
+        return f"💖 Thanks for the {amount} bits, {user}! Appreciate you!"
+
+
+def load_global_emotes(token: str) -> List[str]:
+    """Load global Twitch emotes"""
+    global _global_emotes
+    
+    if _global_emotes:
+        return _global_emotes
+    
+    try:
+        headers = {
+            "Client-ID": TWITCH_CLIENT_ID,
+            "Authorization": f"Bearer {token}"
+        }
+        
+        response = requests.get(
+            f"{TWITCH_API_BASE}/chat/emotes/global",
+            headers=headers
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            _global_emotes = [emote["name"] for emote in data["data"]]
+            print(f"[Events] Loaded {len(_global_emotes)} global emotes")
+            return _global_emotes
+        
+        return []
+    
+    except Exception as e:
+        print(f"[Events] Error loading global emotes: {e}")
+        return []
+
+
+def load_channel_emotes(token: str, broadcaster_id: str) -> List[str]:
+    """Load channel-specific emotes"""
+    global _channel_emotes
+    
+    if _channel_emotes:
+        return _channel_emotes
+    
+    try:
+        headers = {
+            "Client-ID": TWITCH_CLIENT_ID,
+            "Authorization": f"Bearer {token}"
+        }
+        
+        response = requests.get(
+            f"{TWITCH_API_BASE}/chat/emotes",
+            headers=headers,
+            params={"broadcaster_id": broadcaster_id}
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            _channel_emotes = [emote["name"] for emote in data["data"]]
+            print(f"[Events] Loaded {len(_channel_emotes)} channel emotes")
+            return _channel_emotes
+        
+        return []
+    
+    except Exception as e:
+        print(f"[Events] Error loading channel emotes: {e}")
+        return []
+
+
+def add_random_emote(message: str, emotes: List[str]) -> str:
+    """Add a random Twitch emote to message"""
+    if not ENABLE_EMOTE_RESPONSES or not emotes:
+        return message
+    
+    # Common emotes that work well in responses
+    good_emotes = [
+        "PogChamp", "Kappa", "LUL", "NotLikeThis", "BibleThump",
+        "VoHiYo", "CoolCat", "DansGame", "ResidentSleeper", "4Head",
+        "devilmeGODMODE"  # Custom emote
+    ]
+    
+    # Use good emotes if available, otherwise random
+    available_emotes = [e for e in good_emotes if e in emotes]
+    if not available_emotes:
+        available_emotes = random.sample(emotes, min(10, len(emotes)))
+    
+    emote = random.choice(available_emotes)
+    return f"{message} {emote}"
+
+
+def extract_emotes_from_message(message: str, emotes: List[str]) -> List[str]:
+    """Extract which emotes were used in a message"""
+    found_emotes = []
+    for emote in emotes:
+        if emote in message:
+            found_emotes.append(emote)
+    return found_emotes
+
+
+# Example usage and testing
+if __name__ == "__main__":
+    print("=" * 60)
+    print("MedlarTV Twitch Events - Testing")
+    print("=" * 60)
+    
+    # Test raid detection
+    print("\n--- Raid Detection ---")
+    raid_msg = "@msg-id=raid;msg-param-displayName=TestRaider;msg-param-viewerCount=50 :tmi.twitch.tv USERNOTICE #channel"
+    raid_info = detect_raid(raid_msg)
+    if raid_info:
+        print(f"Detected: {raid_info}")
+        print(f"Response: {get_raid_response(raid_info)}")
+    
+    # Test sub detection
+    print("\n--- Subscription Detection ---")
+    sub_msg = "@msg-id=sub;display-name=TestSub;msg-param-cumulative-months=1;msg-param-sub-plan=1000 :tmi.twitch.tv USERNOTICE #channel"
+    sub_info = detect_subscription(sub_msg)
+    if sub_info:
+        print(f"Detected: {sub_info}")
+        print(f"Response: {get_sub_response(sub_info)}")
+    
+    # Test gift sub
+    print("\n--- Gift Sub Detection ---")
+    gift_msg = "@msg-id=subgift;display-name=Gifter;msg-param-recipient-display-name=Lucky;msg-param-months=1 :tmi.twitch.tv USERNOTICE #channel"
+    gift_info = detect_subscription(gift_msg)
+    if gift_info:
+        print(f"Detected: {gift_info}")
+        print(f"Response: {get_sub_response(gift_info)}")
+    
+    # Test channel points
+    print("\n--- Channel Points Detection ---")
+    points_msg = "@msg-id=reward-redeemed;display-name=Viewer;msg-param-reward-title=Hydrate;msg-param-reward-cost=100 :tmi.twitch.tv USERNOTICE #channel"
+    points_info = detect_channel_point_redemption(points_msg)
+    if points_info:
+        print(f"Detected: {points_info}")
+        print(f"Response: {get_channel_point_response(points_info)}")
+    
+    # Test bits
+    print("\n--- Bits Detection ---")
+    bits_msg = "@bits=500;display-name=Cheerer :tmi.twitch.tv PRIVMSG #channel :Cheer500 Let's go!"
+    bits_info = detect_bits(bits_msg)
+    if bits_info:
+        print(f"Detected: {bits_info}")
+        print(f"Response: {get_bits_response(bits_info)}")
 
 
 ================================================================================
@@ -2296,6 +4590,34 @@ from MedlarTV.core.expression import blended_phrase
 from MedlarTV.core.context import record_session_mood
 from MedlarTV.core.fuzzy_trigger import should_respond as fuzzy_should_respond, find_triggers_in_message
 from MedlarTV.avatar.bridge_client import register_channel, send_mood_update, ws_send
+from MedlarTV.core.translation import detect_language, get_multilingual_greeting, add_language_indicator
+from MedlarTV.core.response_templates import get_smart_response
+from MedlarTV.core.interaction_logger import log_interaction, log_command, log_mood_change, log_error
+from MedlarTV.core.moderation import (
+    check_message,
+    execute_timeout,
+    execute_ban,
+    handle_mod_command,
+    is_mod_command
+)
+from MedlarTV.core.stream_management import (
+    get_stream_info,
+    get_channel_info,
+    update_stream_title,
+    update_stream_category,
+    format_stream_info
+)
+from MedlarTV.core.twitch_events import (
+    detect_raid,
+    detect_subscription,
+    detect_channel_point_redemption,
+    detect_bits,
+    get_raid_response,
+    get_sub_response,
+    get_channel_point_response,
+    get_bits_response,
+    add_random_emote
+)
 
 # ⭐ ADD THIS IMPORT - Content Filter
 from MedlarTV.core.content_filter import (
@@ -2768,6 +5090,7 @@ def listen(sock):
             resp = sock.recv(4096).decode("utf-8", errors="ignore")
         except Exception as e:
             log.error(f"[Socket] recv failed: {e}")
+            log_error("socket_error", str(e))
             break
 
         if resp.startswith("PING"):
@@ -2777,7 +5100,36 @@ def listen(sock):
         if not resp.strip():
             continue
 
-        # Parse IRC tags
+        # ⭐ NEW: Detect Twitch events FIRST (before tags parsing)
+        raid_info = detect_raid(resp)
+        if raid_info:
+            response = get_raid_response(raid_info)
+            send_reply(sock, response)
+            log_interaction("SYSTEM", "raid", response, current_mood, "en", metadata=raid_info)
+            continue
+
+        sub_info = detect_subscription(resp)
+        if sub_info:
+            response = get_sub_response(sub_info)
+            send_reply(sock, response)
+            log_interaction("SYSTEM", "subscription", response, current_mood, "en", metadata=sub_info)
+            continue
+
+        points_info = detect_channel_point_redemption(resp)
+        if points_info:
+            response = get_channel_point_response(points_info)
+            send_reply(sock, response)
+            log_interaction("SYSTEM", "channel_points", response, current_mood, "en", metadata=points_info)
+            continue
+
+        bits_info = detect_bits(resp)
+        if bits_info:
+            response = get_bits_response(bits_info)
+            send_reply(sock, response)
+            log_interaction("SYSTEM", "bits", response, current_mood, "en", metadata=bits_info)
+            continue
+
+        # Parse IRC tags (existing code)
         tags = {}
         raw = resp
         if raw.startswith("@"):
@@ -2794,7 +5146,7 @@ def listen(sock):
         msg_id = tags.get("id")
         reply_parent_msg_id = tags.get("reply-parent-msg-id")
 
-        # Auto mood detection from keywords
+        # Auto mood detection (existing code)
         msg_lower = resp.lower()
         detected_mood = None
         if "hype" in msg_lower or "let's go" in msg_lower or "pog" in msg_lower:
@@ -2807,7 +5159,9 @@ def listen(sock):
             detected_mood = "supportive"
         
         if detected_mood:
+            old_mood = current_mood
             switch_mood(detected_mood, auto=True)
+            log_mood_change(old_mood, detected_mood, "keyword")
 
         # Process PRIVMSG (actual chat messages)
         if "PRIVMSG" in resp and "!" in resp:
@@ -2818,10 +5172,13 @@ def listen(sock):
 
                 message = resp.split("PRIVMSG", 1)[1].split(":", 1)[1].strip()
                 
-                # Log with role
+                # Get user role
                 role = get_user_role(username)
                 role_tag = {"pilot": "[PILOT]", "copilot": "[CO-PILOT]", "user": ""}.get(role, "")
                 log.info(f"[Twitch→Core] {role_tag} {username}: {message}")
+
+                # ⭐ NEW: Detect language
+                detected_language = detect_language(message)
 
                 # Store message in recent history
                 if msg_id:
@@ -2830,17 +5187,80 @@ def listen(sock):
                         oldest = next(iter(recent_msgs))
                         recent_msgs.pop(oldest, None)
 
-                # Handle commands first (! commands)
+                # ⭐ NEW: Check moderation FIRST
+                mod_check = check_message(username, message, role)
+                if not mod_check["is_allowed"]:
+                    log.warning(f"[Mod] Blocked message from {username}: {mod_check['reason']}")
+                    
+                    if mod_check["action"] == "timeout":
+                        execute_timeout(sock, CHANNEL, username, mod_check.get("duration", 60), mod_check["reason"])
+                    elif mod_check["action"] == "delete":
+                        execute_delete(sock, CHANNEL, msg_id)
+                    elif mod_check["action"] == "warn":
+                        send_reply(sock, f"@{username} {mod_check['reason']}. Please follow chat rules.")
+                    
+                    continue
+
+                # ⭐ NEW: Handle mod commands
+                if is_mod_command(message):
+                    mod_response = handle_mod_command(sock, CHANNEL, username, message, role)
+                    if mod_response:
+                        send_reply(sock, mod_response, msg_id)
+                        log_command(username, message.split()[0], success=True)
+                    continue
+
+                # Handle regular commands
                 if message.startswith("!"):
+                    # ⭐ NEW: Stream management commands
+                    if message.lower().startswith("!streaminfo"):
+                        stream_info = get_stream_info()
+                        response = format_stream_info(stream_info)
+                        send_reply(sock, response, msg_id)
+                        log_command(username, "!streaminfo", success=True)
+                        continue
+                    
+                    elif message.lower().startswith("!title") and role in ["pilot", "copilot"]:
+                        parts = message.split(maxsplit=1)
+                        if len(parts) > 1:
+                            new_title = parts[1]
+                            if update_stream_title(new_title):
+                                send_reply(sock, f"@{username} Stream title updated!", msg_id)
+                            else:
+                                send_reply(sock, f"@{username} Failed to update title.", msg_id)
+                        else:
+                            channel_info = get_channel_info()
+                            if channel_info:
+                                send_reply(sock, f"Current title: {channel_info['title']}", msg_id)
+                        log_command(username, "!title", success=True)
+                        continue
+                    
+                    elif message.lower().startswith("!game") and role in ["pilot", "copilot"]:
+                        parts = message.split(maxsplit=1)
+                        if len(parts) > 1:
+                            new_game = parts[1]
+                            if update_stream_category(new_game):
+                                send_reply(sock, f"@{username} Category updated to {new_game}!", msg_id)
+                            else:
+                                send_reply(sock, f"@{username} Failed to update category.", msg_id)
+                        else:
+                            channel_info = get_channel_info()
+                            if channel_info:
+                                send_reply(sock, f"Current game: {channel_info['game_name']}", msg_id)
+                        log_command(username, "!game", success=True)
+                        continue
+                    
+                    # Handle existing commands
                     if handle_command(sock, username, message, msg_id):
-                        continue  # Command handled, don't process further
+                        log_command(username, message.split()[0], success=True)
+                        continue
 
                 # Check if we should respond to this message
                 if not should_respond_to_message(username, message):
-                    # Even if not responding, still detect mood
                     mood = detect_mood_from_message(message)
                     if mood:
+                        old_mood = current_mood
                         switch_mood(mood, auto=True)
+                        log_mood_change(old_mood, mood, "auto")
                     continue
 
                 # Rate limiting
@@ -2848,7 +5268,19 @@ def listen(sock):
                     log.info("[Cooldown] Skipping reply (rate limited)")
                     continue
 
-                # ⭐ NEW: Check if user wants all caps mode
+                # ⭐ NEW: Try smart template response first
+                template_response = get_smart_response(message, username, current_mood)
+                
+                if template_response:
+                    # Add language indicator if needed
+                    if detected_language != "en":
+                        template_response = add_language_indicator(template_response, detected_language)
+                    
+                    send_reply(sock, template_response, msg_id)
+                    log_interaction(username, message, template_response, current_mood, detected_language)
+                    continue
+
+                # Check if user wants all caps mode
                 if should_enable_all_caps(message):
                     log.info(f"[Filter] All caps mode activated by {username}")
 
@@ -2858,27 +5290,35 @@ def listen(sock):
                 
                 if not llm_reply:
                     log.warning("[LLM] No response generated")
+                    log_error("llm_no_response", f"Failed for {username}: {message}")
                     continue
 
-                # ⭐ NEW: Apply content filter
+                # Apply content filter
                 is_safe, filtered_reply, reason = filter_message(llm_reply, username)
                 
                 if not is_safe:
-                    # Content was blocked
                     log.warning(f"[Filter] Response blocked: {reason}")
-                    # Send a safe alternative response
                     safe_reply = get_safety_response()
                     send_reply(sock, safe_reply, msg_id if reply_parent_msg_id else None)
+                    log_interaction(username, message, safe_reply, current_mood, detected_language)
                     continue
 
                 # Format with mood styling
                 formatted_reply = format_reply_with_mood(filtered_reply)
                 
+                # ⭐ NEW: Add language indicator
+                if detected_language != "en":
+                    formatted_reply = add_language_indicator(formatted_reply, detected_language)
+                
                 # Send the filtered reply
                 send_reply(sock, formatted_reply, msg_id if reply_parent_msg_id else None)
+                
+                # ⭐ NEW: Log the interaction
+                log_interaction(username, message, formatted_reply, current_mood, detected_language)
 
             except Exception as e:
                 log.error(f"[Handler] Failed to process message: {e}")
+                log_error("message_handler", str(e), {"username": username, "message": message})
                 import traceback
                 traceback.print_exc()
 
