@@ -34,12 +34,13 @@
     "8765": { "label": "Avatar Bridge" }
   },
 
- "env": {
+  "env": {
     "CORE_URL": "http://127.0.0.1:8000",
     "TWITCH_CHANNEL": "#devilmedlar",
     "TWITCH_NICK": "medlartv",
     "TWITCH_TOKEN": "oauth:n653y897jfaabudu5bph200ztacotq",
-    "TWITCH_CLIENT_ID": "gp762nuuoqcoxypju8c569th9wz7q5",
+    "TWITCH_CLIENT_ID": "87h2456qgm66fgfbe0wveg7n43r1rb",
+    "TWITCH_CLIENT_SECRET": "7v5af6s0p0g9j8qr0tyjznnwgag85f",
     "TWITCH_ACCESS_TOKEN": "n653y897jfaabudu5bph200ztacotq",
     "TWITCH_REFRESH_TOKEN": "0sn553nitavk6un09xn3le1vgua6y3g1qifinl729rkr0aatl7"
   }
