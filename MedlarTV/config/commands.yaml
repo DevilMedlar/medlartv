@@ -34,3 +34,33 @@ commands:
   
   listcopilots:
     response: "Active Co-Pilots: {copilots}"
+  
+  # ⭐ NEW: Stream management commands
+  streaminfo:
+    response: "Getting stream info..."
+  
+  title:
+    response: "Current stream title"
+  
+  game:
+    response: "Current game/category"
+  
+  # ⭐ NEW: Moderation commands (pilot/mod only)
+  timeout:
+    response: "User timed out"
+    requires_pilot: true
+  
+  ban:
+    response: "User banned"
+    requires_pilot: true
+  
+  warn:
+    response: "Warning issued"
+    requires_pilot: true
+  
+  whitelist:
+    response: "Domain whitelisted"
+    requires_pilot: true
+  
+  modstats:
+    response: "Moderation statistics"

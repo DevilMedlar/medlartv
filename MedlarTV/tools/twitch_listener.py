@@ -12,6 +12,34 @@ from MedlarTV.core.expression import blended_phrase
 from MedlarTV.core.context import record_session_mood
 from MedlarTV.core.fuzzy_trigger import should_respond as fuzzy_should_respond, find_triggers_in_message
 from MedlarTV.avatar.bridge_client import register_channel, send_mood_update, ws_send
+from MedlarTV.core.translation import detect_language, get_multilingual_greeting, add_language_indicator
+from MedlarTV.core.response_templates import get_smart_response
+from MedlarTV.core.interaction_logger import log_interaction, log_command, log_mood_change, log_error
+from MedlarTV.core.moderation import (
+    check_message,
+    execute_timeout,
+    execute_ban,
+    handle_mod_command,
+    is_mod_command
+)
+from MedlarTV.core.stream_management import (
+    get_stream_info,
+    get_channel_info,
+    update_stream_title,
+    update_stream_category,
+    format_stream_info
+)
+from MedlarTV.core.twitch_events import (
+    detect_raid,
+    detect_subscription,
+    detect_channel_point_redemption,
+    detect_bits,
+    get_raid_response,
+    get_sub_response,
+    get_channel_point_response,
+    get_bits_response,
+    add_random_emote
+)
 
 # ⭐ ADD THIS IMPORT - Content Filter
 from MedlarTV.core.content_filter import (
@@ -484,6 +512,7 @@ def listen(sock):
             resp = sock.recv(4096).decode("utf-8", errors="ignore")
         except Exception as e:
             log.error(f"[Socket] recv failed: {e}")
+            log_error("socket_error", str(e))
             break
 
         if resp.startswith("PING"):
@@ -493,7 +522,36 @@ def listen(sock):
         if not resp.strip():
             continue
 
-        # Parse IRC tags
+        # ⭐ NEW: Detect Twitch events FIRST (before tags parsing)
+        raid_info = detect_raid(resp)
+        if raid_info:
+            response = get_raid_response(raid_info)
+            send_reply(sock, response)
+            log_interaction("SYSTEM", "raid", response, current_mood, "en", metadata=raid_info)
+            continue
+
+        sub_info = detect_subscription(resp)
+        if sub_info:
+            response = get_sub_response(sub_info)
+            send_reply(sock, response)
+            log_interaction("SYSTEM", "subscription", response, current_mood, "en", metadata=sub_info)
+            continue
+
+        points_info = detect_channel_point_redemption(resp)
+        if points_info:
+            response = get_channel_point_response(points_info)
+            send_reply(sock, response)
+            log_interaction("SYSTEM", "channel_points", response, current_mood, "en", metadata=points_info)
+            continue
+
+        bits_info = detect_bits(resp)
+        if bits_info:
+            response = get_bits_response(bits_info)
+            send_reply(sock, response)
+            log_interaction("SYSTEM", "bits", response, current_mood, "en", metadata=bits_info)
+            continue
+
+        # Parse IRC tags (existing code)
         tags = {}
         raw = resp
         if raw.startswith("@"):
@@ -510,7 +568,7 @@ def listen(sock):
         msg_id = tags.get("id")
         reply_parent_msg_id = tags.get("reply-parent-msg-id")
 
-        # Auto mood detection from keywords
+        # Auto mood detection (existing code)
         msg_lower = resp.lower()
         detected_mood = None
         if "hype" in msg_lower or "let's go" in msg_lower or "pog" in msg_lower:
@@ -523,7 +581,9 @@ def listen(sock):
             detected_mood = "supportive"
         
         if detected_mood:
+            old_mood = current_mood
             switch_mood(detected_mood, auto=True)
+            log_mood_change(old_mood, detected_mood, "keyword")
 
         # Process PRIVMSG (actual chat messages)
         if "PRIVMSG" in resp and "!" in resp:
@@ -534,10 +594,13 @@ def listen(sock):
 
                 message = resp.split("PRIVMSG", 1)[1].split(":", 1)[1].strip()
                 
-                # Log with role
+                # Get user role
                 role = get_user_role(username)
                 role_tag = {"pilot": "[PILOT]", "copilot": "[CO-PILOT]", "user": ""}.get(role, "")
                 log.info(f"[Twitch→Core] {role_tag} {username}: {message}")
+
+                # ⭐ NEW: Detect language
+                detected_language = detect_language(message)
 
                 # Store message in recent history
                 if msg_id:
@@ -546,17 +609,80 @@ def listen(sock):
                         oldest = next(iter(recent_msgs))
                         recent_msgs.pop(oldest, None)
 
-                # Handle commands first (! commands)
+                # ⭐ NEW: Check moderation FIRST
+                mod_check = check_message(username, message, role)
+                if not mod_check["is_allowed"]:
+                    log.warning(f"[Mod] Blocked message from {username}: {mod_check['reason']}")
+                    
+                    if mod_check["action"] == "timeout":
+                        execute_timeout(sock, CHANNEL, username, mod_check.get("duration", 60), mod_check["reason"])
+                    elif mod_check["action"] == "delete":
+                        execute_delete(sock, CHANNEL, msg_id)
+                    elif mod_check["action"] == "warn":
+                        send_reply(sock, f"@{username} {mod_check['reason']}. Please follow chat rules.")
+                    
+                    continue
+
+                # ⭐ NEW: Handle mod commands
+                if is_mod_command(message):
+                    mod_response = handle_mod_command(sock, CHANNEL, username, message, role)
+                    if mod_response:
+                        send_reply(sock, mod_response, msg_id)
+                        log_command(username, message.split()[0], success=True)
+                    continue
+
+                # Handle regular commands
                 if message.startswith("!"):
+                    # ⭐ NEW: Stream management commands
+                    if message.lower().startswith("!streaminfo"):
+                        stream_info = get_stream_info()
+                        response = format_stream_info(stream_info)
+                        send_reply(sock, response, msg_id)
+                        log_command(username, "!streaminfo", success=True)
+                        continue
+                    
+                    elif message.lower().startswith("!title") and role in ["pilot", "copilot"]:
+                        parts = message.split(maxsplit=1)
+                        if len(parts) > 1:
+                            new_title = parts[1]
+                            if update_stream_title(new_title):
+                                send_reply(sock, f"@{username} Stream title updated!", msg_id)
+                            else:
+                                send_reply(sock, f"@{username} Failed to update title.", msg_id)
+                        else:
+                            channel_info = get_channel_info()
+                            if channel_info:
+                                send_reply(sock, f"Current title: {channel_info['title']}", msg_id)
+                        log_command(username, "!title", success=True)
+                        continue
+                    
+                    elif message.lower().startswith("!game") and role in ["pilot", "copilot"]:
+                        parts = message.split(maxsplit=1)
+                        if len(parts) > 1:
+                            new_game = parts[1]
+                            if update_stream_category(new_game):
+                                send_reply(sock, f"@{username} Category updated to {new_game}!", msg_id)
+                            else:
+                                send_reply(sock, f"@{username} Failed to update category.", msg_id)
+                        else:
+                            channel_info = get_channel_info()
+                            if channel_info:
+                                send_reply(sock, f"Current game: {channel_info['game_name']}", msg_id)
+                        log_command(username, "!game", success=True)
+                        continue
+                    
+                    # Handle existing commands
                     if handle_command(sock, username, message, msg_id):
-                        continue  # Command handled, don't process further
+                        log_command(username, message.split()[0], success=True)
+                        continue
 
                 # Check if we should respond to this message
                 if not should_respond_to_message(username, message):
-                    # Even if not responding, still detect mood
                     mood = detect_mood_from_message(message)
                     if mood:
+                        old_mood = current_mood
                         switch_mood(mood, auto=True)
+                        log_mood_change(old_mood, mood, "auto")
                     continue
 
                 # Rate limiting
@@ -564,7 +690,19 @@ def listen(sock):
                     log.info("[Cooldown] Skipping reply (rate limited)")
                     continue
 
-                # ⭐ NEW: Check if user wants all caps mode
+                # ⭐ NEW: Try smart template response first
+                template_response = get_smart_response(message, username, current_mood)
+                
+                if template_response:
+                    # Add language indicator if needed
+                    if detected_language != "en":
+                        template_response = add_language_indicator(template_response, detected_language)
+                    
+                    send_reply(sock, template_response, msg_id)
+                    log_interaction(username, message, template_response, current_mood, detected_language)
+                    continue
+
+                # Check if user wants all caps mode
                 if should_enable_all_caps(message):
                     log.info(f"[Filter] All caps mode activated by {username}")
 
@@ -574,27 +712,35 @@ def listen(sock):
                 
                 if not llm_reply:
                     log.warning("[LLM] No response generated")
+                    log_error("llm_no_response", f"Failed for {username}: {message}")
                     continue
 
-                # ⭐ NEW: Apply content filter
+                # Apply content filter
                 is_safe, filtered_reply, reason = filter_message(llm_reply, username)
                 
                 if not is_safe:
-                    # Content was blocked
                     log.warning(f"[Filter] Response blocked: {reason}")
-                    # Send a safe alternative response
                     safe_reply = get_safety_response()
                     send_reply(sock, safe_reply, msg_id if reply_parent_msg_id else None)
+                    log_interaction(username, message, safe_reply, current_mood, detected_language)
                     continue
 
                 # Format with mood styling
                 formatted_reply = format_reply_with_mood(filtered_reply)
                 
+                # ⭐ NEW: Add language indicator
+                if detected_language != "en":
+                    formatted_reply = add_language_indicator(formatted_reply, detected_language)
+                
                 # Send the filtered reply
                 send_reply(sock, formatted_reply, msg_id if reply_parent_msg_id else None)
+                
+                # ⭐ NEW: Log the interaction
+                log_interaction(username, message, formatted_reply, current_mood, detected_language)
 
             except Exception as e:
                 log.error(f"[Handler] Failed to process message: {e}")
+                log_error("message_handler", str(e), {"username": username, "message": message})
                 import traceback
                 traceback.print_exc()
 
