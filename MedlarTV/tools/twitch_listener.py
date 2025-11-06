@@ -7,6 +7,7 @@ import logging
 from dotenv import load_dotenv
 from pathlib import Path
 
+from MedlarTV.core.translation_command import handle_translate_command, get_supported_languages_list
 from MedlarTV.core.memory import record_mood, get_dominant_weighted_mood
 from MedlarTV.core.expression import blended_phrase
 from MedlarTV.core.context import record_session_mood
@@ -205,16 +206,117 @@ def remove_copilot(username: str) -> bool:
     return True
 
 
-def get_user_role(username: str) -> str:
-    """Determine user's role: pilot, copilot, or user."""
+def get_user_role(username: str, badges: dict = None) -> str:
+    """
+    Determine user's role: pilot, mod, copilot, vip, or user.
+    
+    Args:
+        username: Username to check
+        badges: Twitch badges dict (optional, for mod/vip detection)
+    
+    Returns:
+        Role string: "pilot", "mod", "copilot", "vip", or "user"
+    """
     username = username.lower()
+    
+    # Check if user is broadcaster (highest priority)
     if username == PILOT:
         return "pilot"
-    elif username in CO_PILOTS:
+    
+    # Check if user is a Twitch moderator (from badges)
+    if badges and "moderator" in badges:
+        return "mod"
+    
+    # Check if user is a VIP (from badges)
+    if badges and "vip" in badges:
+        return "vip"
+    
+    # Check if user is a co-pilot
+    if username in CO_PILOTS:
         return "copilot"
-    else:
-        return "user"
+    
+    # Default to regular user
+    return "user"
 
+def check_command_permission(username: str, cmd_config: dict, badges: dict = None) -> tuple:
+    """
+    Check if user has permission to use a command.
+    
+    Args:
+        username: Username attempting command
+        cmd_config: Command configuration from commands.yaml
+        badges: Twitch badges dict (optional)
+    
+    Returns:
+        Tuple of (has_permission: bool, denial_reason: str)
+    """
+    # Get user's role
+    user_role = get_user_role(username, badges)
+    
+    # Get allowed roles for this command (default to everybody if not specified)
+    allowed_roles = cmd_config.get("allowed_roles", ["everybody"])
+    
+    # If "everybody" is in allowed_roles, everyone can use it
+    if "everybody" in allowed_roles:
+        return True, ""
+    
+    # Pilot always has access to everything
+    if user_role == "pilot":
+        return True, ""
+    
+    # Check if user's role is in allowed roles
+    if user_role in allowed_roles:
+        return True, ""
+    
+    # Permission denied - create helpful message
+    role_names = {
+        "pilot": "Broadcaster",
+        "mod": "Moderator",
+        "copilot": "Co-Pilot",
+        "vip": "VIP",
+        "user": "Viewer"
+    }
+    
+    allowed_names = [role_names.get(role, role) for role in allowed_roles]
+    required = ", ".join(allowed_names)
+    
+    return False, f"This command requires: {required}"
+
+def extract_badges_from_irc(irc_message: str) -> dict:
+    """
+    Extract Twitch badges from IRC message tags.
+    
+    Args:
+        irc_message: Raw IRC message with tags
+    
+    Returns:
+        Dict of badges (e.g., {"moderator": "1", "vip": "1"})
+    """
+    badges = {}
+    
+    if not irc_message.startswith("@"):
+        return badges
+    
+    try:
+        # Extract tags section
+        tags_section = irc_message.split(" ", 1)[0][1:]  # Remove @ prefix
+        
+        # Parse tags
+        for tag in tags_section.split(";"):
+            if "=" in tag:
+                key, value = tag.split("=", 1)
+                
+                # Parse badges tag
+                if key == "badges":
+                    if value:
+                        for badge in value.split(","):
+                            if "/" in badge:
+                                badge_name, badge_version = badge.split("/", 1)
+                                badges[badge_name] = badge_version
+    except Exception as e:
+        log.warning(f"[Badges] Failed to parse badges: {e}")
+    
+    return badges
 
 def format_username(username: str) -> str:
     """Format username based on role."""
@@ -302,21 +404,24 @@ def send_reply(sock, message, reply_to_msg_id=None):
     log.info(f"[MedlarTV→Twitch] {message}")
 
 
-def handle_command(sock, username, message, msg_id=None):
-    """Handle ! commands from chat."""
+def handle_command(sock, username, message, msg_id=None, badges=None):
+    """Handle ! commands from chat with flexible role-based permissions."""
     parts = message.split()
-    cmd = parts[0][1:].lower()  # Remove the !
+    cmd = parts[0][1:].lower()
+    args = " ".join(parts[1:]) if len(parts) > 1 else ""
     
     if cmd not in COMMANDS:
         return False
     
     cmd_config = COMMANDS[cmd]
     
-    # Check if command requires pilot permission
-    if cmd_config.get("requires_pilot", False):
-        if get_user_role(username) != "pilot":
-            send_reply(sock, f"@{username} This command is restricted to Pilot only.", msg_id)
-            return True
+    # Check flexible role-based permissions
+    has_permission, denial_reason = check_command_permission(username, cmd_config, badges)
+    
+    if not has_permission:
+        send_reply(sock, f"@{username} ❌ {denial_reason}", msg_id)
+        log.info(f"[Command] {username} denied access to !{cmd}: {denial_reason}")
+        return True
     
     response = cmd_config.get("response", "")
     
@@ -361,6 +466,20 @@ def handle_command(sock, username, message, msg_id=None):
             response = response.replace("{copilots}", copilot_list)
         else:
             response = f"{formatted_user} No active Co-Pilots."
+     
+     # Translation Command
+    elif cmd in ["t", "translate", "trans"]:
+        response = handle_translate_command(args, username)
+        send_reply(SOCKET, response, msg_id)
+        log_command(username, cmd, args, response)
+        return
+    
+    # NEW: Translation Help
+    elif cmd in ["tlang", "translatelangs", "languages"]:
+        langs = get_supported_languages_list()
+        response = f"@{username} Supported languages: {langs}"
+        send_reply(SOCKET, response, msg_id)
+        return
     
     send_reply(sock, response, msg_id)
     return True
@@ -586,15 +705,34 @@ def listen(sock):
         # Process PRIVMSG (actual chat messages)
         if "PRIVMSG" in resp and "!" in resp:
             try:
+                # ⭐ NEW: Extract badges from tags (simple inline method)
+                badges = {}
+                if "badges=" in resp:
+                    try:
+                        badges_str = resp.split("badges=")[1].split(";")[0]
+                        if badges_str:
+                            for badge in badges_str.split(","):
+                                if "/" in badge:
+                                    badge_name, badge_version = badge.split("/", 1)
+                                    badges[badge_name] = badge_version
+                    except Exception as e:
+                        log.warning(f"[Badges] Failed to parse: {e}")
+                
                 username = resp.split("!", 1)[0][1:].lower()
                 if username in ignored_users:
                     continue
 
                 message = resp.split("PRIVMSG", 1)[1].split(":", 1)[1].strip()
                 
-                # Get user role
-                role = get_user_role(username)
-                role_tag = {"pilot": "[PILOT]", "copilot": "[CO-PILOT]", "user": ""}.get(role, "")
+                # ⭐ UPDATED: Get user role WITH badges
+                role = get_user_role(username, badges)
+                role_tag = {
+                    "pilot": "[PILOT]",
+                    "mod": "[MOD]",
+                    "copilot": "[CO-PILOT]",
+                    "vip": "[VIP]",
+                    "user": ""
+                }.get(role, "")
                 log.info(f"[Twitch→Core] {role_tag} {username}: {message}")
 
                 # Detect language
@@ -631,7 +769,12 @@ def listen(sock):
 
                 # Handle regular commands
                 if message.startswith("!"):
-                    # Stream management commands
+                    # ⭐ NEW: Try flexible permission commands first (with badges)
+                    if handle_command(sock, username, message, msg_id, badges):
+                        log_command(username, message.split()[0], success=True)
+                        continue
+                    
+                    # Stream management commands (fallback for special commands)
                     if message.lower().startswith("!streaminfo"):
                         stream_info = get_stream_info()
                         response = format_stream_info(stream_info)
@@ -667,11 +810,6 @@ def listen(sock):
                             if channel_info:
                                 send_reply(sock, f"Current game: {channel_info['game_name']}", msg_id)
                         log_command(username, "!game", success=True)
-                        continue
-                    
-                    # Handle existing commands
-                    if handle_command(sock, username, message, msg_id):
-                        log_command(username, message.split()[0], success=True)
                         continue
 
                 # Check if we should respond to this message
@@ -741,7 +879,6 @@ def listen(sock):
                 log_error("message_handler", str(e), {"username": username, "message": message})
                 import traceback
                 traceback.print_exc()
-
 
 def cleanup_and_exit(sock):
     """Send goodbye message and close socket cleanly."""

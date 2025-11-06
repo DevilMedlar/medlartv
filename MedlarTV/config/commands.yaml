@@ -1,66 +1,176 @@
 commands:
+  # GENERAL COMMANDS  
   ping:
     response: "Pong 🏓 — I hear you, {user}!"
+    allowed_roles: ["everybody"]
   
   status:
     response: "System nominal ⚙️ | Connected as {nick}"
+    allowed_roles: ["everybody"]
   
   hello:
     response: "Hey {user}! 👋 Ready for action."
+    allowed_roles: ["everybody"]
   
   hype:
     response: "🔥 LET'S GOOOOO, {user}!"
+    allowed_roles: ["everybody"]
   
   medlar:
-    response: "devilmeGODMODE Medlar mode engaged, {user} 😈"
+    response: "Medlar mode engaged, {user} 😈"
+    allowed_roles: ["everybody"]
+  
+  help:
+    response: "Available commands: !ping, !status, !hello, !hype, !medlar, !mood, !emotion, !emotions,!feelstate, !t, !tlang, !thelp, !listcopilots, !streaminfo, !title, !game, !help"
+    allowed_roles: ["everybody"]
+
+  modhelp:
+    response: "Available commands: !moodnumbers, !resetemotions, !addcopilot, !removecopilot, !timeout, !ban, !warn, !unwarn, !whitelist, !modstats, !modhelp"
+    allowed_roles: ["pilot", "mod"]
+
+  # MOOD & EMOTION COMMANDS
+  mood:
+    response: "Current mood: {mood} | All systems operational"
+    allowed_roles: ["everybody"]
   
   moodnumbers:
     response: "{user} 📊 Mood breakdown incoming!"
+    allowed_roles: ["pilot", "copilot", "mod"]
   
-  mood:
-    response: "Current mood: {mood} | All systems operational"
+  emotion:
+    response: "Checking current emotion..."
+    allowed_roles: ["everybody"]
+    description: "Show MedlarTV's dominant emotion"
   
-  help:
-    response: "Available commands: !ping, !status, !hello, !hype, !medlar, !mood, !moodnumbers, !addcopilot, !removecopilot, !listcopilots, !help"
+  emotions:
+    response: "Analyzing emotional state..."
+    allowed_roles: ["everybody"]
+    description: "Show top 3 emotions with percentages"
   
-  # Co-Pilot Management Commands (Pilot only)
+  feelstate:
+    response: "Getting full emotional description..."
+    allowed_roles: ["everybody"]
+    description: "Show detailed emotional state"
+  
+  resetemotions:
+    response: "Resetting emotions to baseline..."
+    allowed_roles: ["pilot", "mod"]
+    description: "Reset all emotions to baseline (Pilot only)"
+  
+  # TRANSLATION COMMANDS
+  t:
+    response: "Translating..."
+    allowed_roles: ["everybody"]
+    description: "Translate text to another language"
+    usage: "!t <lang> <text> | Example: !t jp Hello!"
+  
+  translate:
+    response: "Translating..."
+    allowed_roles: ["everybody"]
+    description: "Alias for !t command"
+  
+  trans:
+    response: "Translating..."
+    allowed_roles: ["everybody"]
+    description: "Short alias for translate"
+  
+  tlang:
+    response: "Supported languages: jp/ja (🇯🇵), kr/ko (🇰🇷), cn/zh (🇨🇳), sp/es (🇪🇸), fr (🇫🇷), de (🇩🇪), pt (🇵🇹), ru (🇷🇺), it (🇮🇹)"
+    allowed_roles: ["everybody"]
+    description: "Show supported translation languages"
+  
+  translatelangs:
+    response: "Supported languages: jp/ja (🇯🇵), kr/ko (🇰🇷), cn/zh (🇨🇳), sp/es (🇪🇸), fr (🇫🇷), de (🇩🇪), pt (🇵🇹), ru (🇷🇺), it (🇮🇹)"
+    allowed_roles: ["everybody"]
+  
+  languages:
+    response: "Supported languages: jp/ja (🇯🇵), kr/ko (🇰🇷), cn/zh (🇨🇳), sp/es (🇪🇸), fr (🇫🇷), de (🇩🇪), pt (🇵🇹), ru (🇷🇺), it (🇮🇹)"
+    allowed_roles: ["everybody"]
+  
+  thelp:
+    response: "!t <lang> <text> | Example: !t jp Hello!  use !tlang to see supported languages"
+    allowed_roles: ["everybody"]
+    
+  # CO-PILOT MANAGEMENT
   addcopilot:
     response: "Co-Pilot {target} registered! Welcome to the squad! 🚀"
-    requires_pilot: true
+    allowed_roles: ["pilot", "mod"]
+    description: "Add a co-pilot user"
+    usage: "!addcopilot username"
   
   removecopilot:
     response: "Co-Pilot {target} unregistered. Thanks for flying with us! o7"
-    requires_pilot: true
+    allowed_roles: ["pilot", "copilot", "mod"]
+    description: "Remove a co-pilot user"
+    usage: "!removecopilot username"
   
   listcopilots:
     response: "Active Co-Pilots: {copilots}"
+    allowed_roles: ["everybody"]
+    description: "List all active co-pilots"
   
-  # Stream management commands
+  # STREAM MANAGEMENT
   streaminfo:
     response: "Getting stream info..."
+    allowed_roles: ["everybody"]
+    description: "Get current stream information"
   
   title:
     response: "Current stream title"
+    allowed_roles: ["everybody"]
+    description: "Get or set stream title"
   
   game:
     response: "Current game/category"
+    allowed_roles: ["everybody"]
+    description: "Get or set stream category"
   
-  # Moderation commands (pilot/mod only)
+  # MODERATION COMMANDS
   timeout:
     response: "User timed out"
-    requires_pilot: true
+    allowed_roles: ["pilot", "mod"]
+    description: "Timeout a user"
+    usage: "!timeout username duration reason"
   
   ban:
     response: "User banned"
-    requires_pilot: true
+    allowed_roles: ["pilot", "mod"]
+    description: "Ban a user"
+    usage: "!ban username reason"
   
   warn:
     response: "Warning issued"
-    requires_pilot: true
+    allowed_roles: ["pilot", "mod"]
+    description: "Warn a user"
+    usage: "!warn username"
+  
+  unwarn:
+    response: "Warning removed"
+    allowed_roles: ["pilot", "mod"]
+    description: "Remove warning from user"
+    usage: "!unwarn username"
   
   whitelist:
     response: "Domain whitelisted"
-    requires_pilot: true
+    allowed_roles: ["pilot", "mod"]
+    description: "Add domain to link whitelist"
+    usage: "!whitelist domain.com"
   
   modstats:
     response: "Moderation statistics"
+    allowed_roles: ["pilot", "mod"]
+    description: "View moderation statistics"
+
+# ============================================================================
+# PERMISSION LEVELS EXPLAINED
+# ============================================================================
+#
+# allowed_roles: ["pilot"]                          - Broadcaster only
+# allowed_roles: ["pilot", "mod"]                   - Broadcaster & Mods
+# allowed_roles: ["pilot", "copilot"]               - Broadcaster & Co-pilots
+# allowed_roles: ["pilot", "copilot", "mod"]        - Broadcaster, Co-pilots & Mods
+# allowed_roles: ["pilot", "copilot", "mod", "vip"] - Broadcaster, Co-pilots, Mods & VIPs
+# allowed_roles: ["everybody"]                      - Everyone can use
+#
+# Note: "pilot" always has access to everything regardless of allowed_roles
+# ============================================================================

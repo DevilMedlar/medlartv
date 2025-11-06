@@ -4412,6 +4412,8 @@
 │   │   │   └── memory.cpython-311.pyc
 │   │   ├── content_filter.py
 │   │   ├── context.py
+│   │   ├── emotion_emote_selector.py
+│   │   ├── emotional_system.py
 │   │   ├── expression.py
 │   │   ├── fuzzy_trigger.py
 │   │   ├── interaction_logger.py
@@ -4421,6 +4423,7 @@
 │   │   ├── moderation.py
 │   │   ├── response_templates.py
 │   │   ├── sentiment.py
+│   │   ├── sentiment_advanced.py
 │   │   ├── stream_management.py
 │   │   ├── translation.py
 │   │   └── twitch_events.py
@@ -4444,4 +4447,4 @@
 ├── stop_medlartv.sh
 └── verify_setup.py
 
-542 directories, 3903 files
+542 directories, 3906 files
