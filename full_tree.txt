@@ -4426,6 +4426,7 @@
 │   │   ├── sentiment_advanced.py
 │   │   ├── stream_management.py
 │   │   ├── translation.py
+│   │   ├── translation_command.py
 │   │   └── twitch_events.py
 │   ├── data
 │   │   ├── __init__.py
@@ -4447,4 +4448,4 @@
 ├── stop_medlartv.sh
 └── verify_setup.py
 
-542 directories, 3906 files
+542 directories, 3907 files

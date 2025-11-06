@@ -21,13 +21,13 @@ from .llm_brain import (
 )
 
 # Context Tracking
-from .context import (
+from mood_system import (
     record_session_mood,
     get_contextual_mix
 )
 
 # Expression & Sentiment (Legacy)
-from .expression import blended_phrase
+from mood_system import blended_phrase
 from .sentiment import analyze_sentiment
 
 # Fuzzy Trigger Detection
