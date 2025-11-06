@@ -1,8 +1,9 @@
 """
 MedlarTV Core Module
-Contains the brain, memory, sentiment analysis, context tracking, and all new features
+Contains the brain, memory, sentiment analysis, context tracking, emotional system, and all features
 """
 
+# Memory System
 from .memory import (
     load_memory,
     save_memory,
@@ -12,19 +13,24 @@ from .memory import (
     reset_memory_on_shutdown
 )
 
+# LLM Brain
 from .llm_brain import (
     generate_response,
     check_ollama_health,
     clear_history
 )
 
+# Context Tracking
 from .context import (
     record_session_mood,
     get_contextual_mix
 )
 
+# Expression & Sentiment (Legacy)
 from .expression import blended_phrase
 from .sentiment import analyze_sentiment
+
+# Fuzzy Trigger Detection
 from .fuzzy_trigger import (
     should_respond as fuzzy_should_respond,
     find_triggers_in_message,
@@ -100,6 +106,43 @@ from .twitch_events import (
     extract_emotes_from_message
 )
 
+# Content Filter Module
+from .content_filter import (
+    filter_message,
+    should_enable_all_caps,
+    get_safety_response
+)
+
+# ⭐ NEW: Advanced Emotional System
+try:
+    from .emotional_system import (
+        get_emotional_system,
+        process_chat_emotion,
+        get_current_emotion,
+        get_emotion_state,
+        boost_emotion,
+        reset_emotions
+    )
+    
+    from .sentiment_advanced import (
+        analyze_sentiment_advanced,
+        analyze_sentiment_simple,
+        detect_emotional_keywords,
+        get_sentiment_description
+    )
+    
+    from .emotion_emote_selector import (
+        get_emotion_emote,
+        add_emotion_emote,
+        format_message_with_emotions,
+        get_multiple_emotion_emotes
+    )
+    
+    EMOTIONAL_SYSTEM_AVAILABLE = True
+except ImportError:
+    # Emotional system not yet installed
+    EMOTIONAL_SYSTEM_AVAILABLE = False
+
 __all__ = [
     # Memory functions
     'load_memory',
@@ -118,7 +161,7 @@ __all__ = [
     'record_session_mood',
     'get_contextual_mix',
     
-    # Expression & Sentiment
+    # Expression & Sentiment (Legacy)
     'blended_phrase',
     'analyze_sentiment',
     
@@ -183,4 +226,36 @@ __all__ = [
     'load_channel_emotes',
     'add_random_emote',
     'extract_emotes_from_message',
+    
+    # Content Filter
+    'filter_message',
+    'should_enable_all_caps',
+    'get_safety_response',
 ]
+
+# Add emotional system exports if available
+if EMOTIONAL_SYSTEM_AVAILABLE:
+    __all__.extend([
+        # Advanced Emotional System
+        'get_emotional_system',
+        'process_chat_emotion',
+        'get_current_emotion',
+        'get_emotion_state',
+        'boost_emotion',
+        'reset_emotions',
+        
+        # Advanced Sentiment
+        'analyze_sentiment_advanced',
+        'analyze_sentiment_simple',
+        'detect_emotional_keywords',
+        'get_sentiment_description',
+        
+        # Emotion-Aware Emotes
+        'get_emotion_emote',
+        'add_emotion_emote',
+        'format_message_with_emotions',
+        'get_multiple_emotion_emotes',
+        
+        # Status flag
+        'EMOTIONAL_SYSTEM_AVAILABLE',
+    ])

@@ -1,7 +1,12 @@
+"""
+MedlarTV Core API
+FastAPI server for MedlarTV functionality
+"""
+
 from fastapi import FastAPI, Body
 import yaml
 from pathlib import Path
-from MedlarTV.core.memory import load_memory, reset_memory_on_shutdown
+from MedlarTV.core.memory import reset_memory_on_shutdown
 from MedlarTV.core.llm_brain import generate_response
 import atexit
 
@@ -30,6 +35,38 @@ def current_mood():
     from MedlarTV.core.memory import get_dominant_weighted_mood
     mood = get_dominant_weighted_mood()
     return {"mood": mood, "status": "operational"}
+
+@app.post("/mood")
+def update_mood(data: dict = Body(...)):
+    """Update MedlarTV's current mood via POST."""
+    from MedlarTV.core.memory import record_mood
+    new_mood = data.get("mood")
+    if new_mood:
+        record_mood(new_mood)
+        return {"mood": new_mood, "status": "updated"}
+    return {"error": "No mood provided", "status": "error"}
+
+@app.get("/emotions")
+def get_emotions():
+    """Get current emotional state (new advanced system)."""
+    try:
+        from MedlarTV.core.emotional_system import get_emotional_system
+        
+        system = get_emotional_system()
+        return {
+            "dominant": system.get_dominant_emotion(),
+            "top_3": system.get_top_emotions(3),
+            "all_emotions": system.get_emotional_state(),
+            "description": system.get_mood_description(),
+            "status": "operational"
+        }
+    except ImportError:
+        # Fallback if emotional system not installed yet
+        from MedlarTV.core.memory import get_dominant_weighted_mood
+        return {
+            "dominant": get_dominant_weighted_mood(),
+            "status": "legacy_mode"
+        }
 
 @app.get("/personality")
 def personality():
