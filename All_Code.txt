@@ -1282,9 +1282,10 @@ FILE: MedlarTV/core/__init__.py
 
 """
 MedlarTV Core Module
-Contains the brain, memory, sentiment analysis, context tracking, and all new features
+Contains the brain, memory, sentiment analysis, context tracking, emotional system, and all features
 """
 
+# Memory System
 from .memory import (
     load_memory,
     save_memory,
@@ -1294,19 +1295,24 @@ from .memory import (
     reset_memory_on_shutdown
 )
 
+# LLM Brain
 from .llm_brain import (
     generate_response,
     check_ollama_health,
     clear_history
 )
 
+# Context Tracking
 from .context import (
     record_session_mood,
     get_contextual_mix
 )
 
+# Expression & Sentiment (Legacy)
 from .expression import blended_phrase
 from .sentiment import analyze_sentiment
+
+# Fuzzy Trigger Detection
 from .fuzzy_trigger import (
     should_respond as fuzzy_should_respond,
     find_triggers_in_message,
@@ -1382,6 +1388,43 @@ from .twitch_events import (
     extract_emotes_from_message
 )
 
+# Content Filter Module
+from .content_filter import (
+    filter_message,
+    should_enable_all_caps,
+    get_safety_response
+)
+
+# ⭐ NEW: Advanced Emotional System
+try:
+    from .emotional_system import (
+        get_emotional_system,
+        process_chat_emotion,
+        get_current_emotion,
+        get_emotion_state,
+        boost_emotion,
+        reset_emotions
+    )
+    
+    from .sentiment_advanced import (
+        analyze_sentiment_advanced,
+        analyze_sentiment_simple,
+        detect_emotional_keywords,
+        get_sentiment_description
+    )
+    
+    from .emotion_emote_selector import (
+        get_emotion_emote,
+        add_emotion_emote,
+        format_message_with_emotions,
+        get_multiple_emotion_emotes
+    )
+    
+    EMOTIONAL_SYSTEM_AVAILABLE = True
+except ImportError:
+    # Emotional system not yet installed
+    EMOTIONAL_SYSTEM_AVAILABLE = False
+
 __all__ = [
     # Memory functions
     'load_memory',
@@ -1400,7 +1443,7 @@ __all__ = [
     'record_session_mood',
     'get_contextual_mix',
     
-    # Expression & Sentiment
+    # Expression & Sentiment (Legacy)
     'blended_phrase',
     'analyze_sentiment',
     
@@ -1465,7 +1508,39 @@ __all__ = [
     'load_channel_emotes',
     'add_random_emote',
     'extract_emotes_from_message',
+    
+    # Content Filter
+    'filter_message',
+    'should_enable_all_caps',
+    'get_safety_response',
 ]
+
+# Add emotional system exports if available
+if EMOTIONAL_SYSTEM_AVAILABLE:
+    __all__.extend([
+        # Advanced Emotional System
+        'get_emotional_system',
+        'process_chat_emotion',
+        'get_current_emotion',
+        'get_emotion_state',
+        'boost_emotion',
+        'reset_emotions',
+        
+        # Advanced Sentiment
+        'analyze_sentiment_advanced',
+        'analyze_sentiment_simple',
+        'detect_emotional_keywords',
+        'get_sentiment_description',
+        
+        # Emotion-Aware Emotes
+        'get_emotion_emote',
+        'add_emotion_emote',
+        'format_message_with_emotions',
+        'get_multiple_emotion_emotes',
+        
+        # Status flag
+        'EMOTIONAL_SYSTEM_AVAILABLE',
+    ])
 
 
 
@@ -1815,6 +1890,608 @@ def get_contextual_mix():
         counts[mood] = counts.get(mood, 0) + 1
     total = sum(counts.values())
     return {m: counts.get(m, 0) / total for m in ["hype", "chill", "snarky", "supportive"]}
+
+
+================================================================================
+FILE: MedlarTV/core/emotion_emote_selector.py
+================================================================================
+
+"""
+MedlarTV Emotion-Aware Emote Selector
+Automatically chooses emotes based on current emotional state
+"""
+
+import random
+from typing import List, Optional
+
+# Emotion-to-Emote mapping
+EMOTION_EMOTE_MAP = {
+    # Core Emotions
+    "happiness": {
+        "twitch": ["PogChamp", "VoHiYo", "CoolCat", "devilmeGODMODE"],
+        "unicode": ["😊", "😀", "😁", "💖", "✨"]
+    },
+    "sadness": {
+        "twitch": ["BibleThump", "NotLikeThis"],
+        "unicode": ["😢", "😔", "😞", "💔"]
+    },
+    "anger": {
+        "twitch": ["DansGame", "ResidentSleeper"],
+        "unicode": ["😠", "😡", "💢", "🤬"]
+    },
+    "fear": {
+        "twitch": ["NotLikeThis", "BibleThump"],
+        "unicode": ["😨", "😰", "😱", "🙀"]
+    },
+    
+    # Social Emotions
+    "excitement": {
+        "twitch": ["PogChamp", "Kreygasm", "devilmeGODMODE", "PogChamp"],
+        "unicode": ["🔥", "⚡", "🚀", "💥", "✨"]
+    },
+    "gratitude": {
+        "twitch": ["VoHiYo", "CoolCat", "devilmeGODMODE"],
+        "unicode": ["💖", "💕", "🙏", "✨", "💝"]
+    },
+    "jealousy": {
+        "twitch": ["DansGame", "ResidentSleeper"],
+        "unicode": ["😒", "🙄", "😤"]
+    },
+    "pride": {
+        "twitch": ["PogChamp", "CoolCat", "devilmeGODMODE"],
+        "unicode": ["🏆", "👑", "💪", "⭐", "🌟"]
+    },
+    
+    # Mood States
+    "chill": {
+        "twitch": ["CoolCat", "Kappa", "devilmeGODMODE"],
+        "unicode": ["😌", "🌙", "💫", "🫶", "✌️"]
+    },
+    "supportive": {
+        "twitch": ["VoHiYo", "CoolCat", "devilmeGODMODE"],
+        "unicode": ["💖", "🌟", "✨", "💪", "🤗"]
+    },
+    "snarky": {
+        "twitch": ["Kappa", "4Head", "LUL"],
+        "unicode": ["😏", "🙃", "😉", "😈", "🤨"]
+    },
+    
+    # Energy States
+    "energetic": {
+        "twitch": ["PogChamp", "Kreygasm", "devilmeGODMODE"],
+        "unicode": ["⚡", "🔥", "💪", "🚀", "✨"]
+    },
+    "tired": {
+        "twitch": ["ResidentSleeper", "NotLikeThis"],
+        "unicode": ["😴", "💤", "😪", "🥱"]
+    },
+    "stressed": {
+        "twitch": ["NotLikeThis", "DansGame"],
+        "unicode": ["😰", "😓", "😤", "😫"]
+    },
+    
+    # Connection States
+    "lonely": {
+        "twitch": ["BibleThump", "NotLikeThis"],
+        "unicode": ["😔", "💔", "😢", "🥺"]
+    },
+    "connected": {
+        "twitch": ["VoHiYo", "CoolCat", "devilmeGODMODE"],
+        "unicode": ["🤝", "💖", "✨", "🌟", "💕"]
+    }
+}
+
+# Fallback emotes for unknown emotions
+DEFAULT_EMOTES = {
+    "twitch": ["devilmeGODMODE", "PogChamp", "Kappa", "CoolCat"],
+    "unicode": ["💬", "✨", "🎮", "🎯"]
+}
+
+
+def get_emotion_emote(emotion: str, emote_type: str = "twitch", available_emotes: Optional[List[str]] = None) -> str:
+    """
+    Get an appropriate emote for the given emotion.
+    
+    Args:
+        emotion: Current emotional state (e.g., "happiness", "excitement")
+        emote_type: "twitch" for Twitch emotes, "unicode" for emoji
+        available_emotes: List of emotes available in the channel (optional)
+    
+    Returns:
+        A single emote string
+    """
+    # Get emote pool for this emotion
+    if emotion in EMOTION_EMOTE_MAP:
+        emote_pool = EMOTION_EMOTE_MAP[emotion].get(emote_type, [])
+    else:
+        emote_pool = DEFAULT_EMOTES.get(emote_type, [])
+    
+    # If available_emotes provided, filter to only available ones
+    if available_emotes and emote_type == "twitch":
+        emote_pool = [e for e in emote_pool if e in available_emotes]
+        
+        # If no emotes available from pool, use any available custom emote
+        if not emote_pool and available_emotes:
+            emote_pool = available_emotes
+    
+    # Return random emote from pool
+    if emote_pool:
+        return random.choice(emote_pool)
+    
+    # Absolute fallback
+    return "devilmeGODMODE" if emote_type == "twitch" else "💬"
+
+
+def add_emotion_emote(message: str, emotion: str, available_emotes: Optional[List[str]] = None, 
+                      use_unicode: bool = False) -> str:
+    """
+    Add an emotion-appropriate emote to a message.
+    
+    Args:
+        message: The message text
+        emotion: Current emotional state
+        available_emotes: List of available Twitch emotes (optional)
+        use_unicode: If True, use unicode emoji instead of Twitch emotes
+    
+    Returns:
+        Message with emote appended
+    """
+    emote_type = "unicode" if use_unicode else "twitch"
+    emote = get_emotion_emote(emotion, emote_type, available_emotes)
+    return f"{message} {emote}"
+
+
+def get_multiple_emotion_emotes(emotions: dict, count: int = 2, emote_type: str = "twitch",
+                                available_emotes: Optional[List[str]] = None) -> List[str]:
+    """
+    Get multiple emotes representing a complex emotional state.
+    
+    Args:
+        emotions: Dict of emotions with their values (e.g., {"happiness": 0.7, "excitement": 0.5})
+        count: Number of emotes to return
+        emote_type: "twitch" or "unicode"
+        available_emotes: List of available Twitch emotes
+    
+    Returns:
+        List of emote strings
+    """
+    # Sort emotions by value (highest first)
+    sorted_emotions = sorted(emotions.items(), key=lambda x: x[1], reverse=True)
+    
+    # Get emotes for top emotions
+    selected_emotes = []
+    for emotion, value in sorted_emotions[:count]:
+        if value > 0.3:  # Only include emotions above 30%
+            emote = get_emotion_emote(emotion, emote_type, available_emotes)
+            if emote not in selected_emotes:  # Avoid duplicates
+                selected_emotes.append(emote)
+    
+    # Fill up to count if needed
+    while len(selected_emotes) < count:
+        fallback = get_emotion_emote("chill", emote_type, available_emotes)
+        if fallback not in selected_emotes:
+            selected_emotes.append(fallback)
+        else:
+            break
+    
+    return selected_emotes[:count]
+
+
+def format_message_with_emotions(message: str, emotion_state: dict, 
+                                 available_emotes: Optional[List[str]] = None,
+                                 max_emotes: int = 2) -> str:
+    """
+    Format a message with emotion-appropriate emotes.
+    
+    Args:
+        message: The message text
+        emotion_state: Dict of all emotion values
+        available_emotes: List of available Twitch emotes
+        max_emotes: Maximum number of emotes to add
+    
+    Returns:
+        Formatted message with emotes
+    """
+    # Get top emotions
+    top_emotions = dict(sorted(emotion_state.items(), key=lambda x: x[1], reverse=True)[:3])
+    
+    # Get appropriate emotes
+    emotes = get_multiple_emotion_emotes(top_emotions, max_emotes, "twitch", available_emotes)
+    
+    # Add emotes to message
+    if emotes:
+        emote_str = " ".join(emotes)
+        return f"{message} {emote_str}"
+    
+    return message
+
+
+# Integration example
+def integrate_with_emotional_system():
+    """
+    Example of how to integrate with the emotional system
+    """
+    from MedlarTV.core.emotional_system import get_emotion_state, get_current_emotion
+    from MedlarTV.core.twitch_events import load_channel_emotes, load_global_emotes
+    
+    # Get current emotional state
+    emotion_state = get_emotion_state()
+    dominant_emotion = get_current_emotion()
+    
+    # Load available emotes (you'd do this once at startup)
+    # token = os.getenv("TWITCH_TOKEN")
+    # broadcaster_id = "your_broadcaster_id"
+    # available_emotes = load_global_emotes(token) + load_channel_emotes(token, broadcaster_id)
+    available_emotes = ["PogChamp", "Kappa", "LUL", "devilmeGODMODE", "CoolCat"]
+    
+    # Generate response
+    message = "Thanks for being here!"
+    
+    # Add emotion-appropriate emote
+    formatted_message = add_emotion_emote(message, dominant_emotion, available_emotes)
+    print(f"Simple: {formatted_message}")
+    
+    # Or use full emotion state for richer expression
+    rich_message = format_message_with_emotions(message, emotion_state, available_emotes, max_emotes=2)
+    print(f"Rich: {rich_message}")
+
+
+# Example usage
+if __name__ == "__main__":
+    print("=" * 60)
+    print("Emotion-Aware Emote Selector - Demo")
+    print("=" * 60)
+    
+    # Simulate different emotional states
+    test_emotions = [
+        ("happiness", {"happiness": 0.8, "excitement": 0.5}),
+        ("excitement", {"excitement": 0.9, "happiness": 0.6, "energetic": 0.7}),
+        ("sadness", {"sadness": 0.6, "lonely": 0.4}),
+        ("chill", {"chill": 0.7, "connected": 0.5}),
+        ("snarky", {"snarky": 0.6, "anger": 0.3}),
+    ]
+    
+    available = ["PogChamp", "Kappa", "LUL", "devilmeGODMODE", "CoolCat", "BibleThump"]
+    
+    for emotion, state in test_emotions:
+        print(f"\n--- {emotion.upper()} ---")
+        
+        # Simple emote selection
+        emote = get_emotion_emote(emotion, "twitch", available)
+        print(f"Selected Twitch emote: {emote}")
+        
+        # Unicode emoji
+        emoji = get_emotion_emote(emotion, "unicode")
+        print(f"Selected Unicode emoji: {emoji}")
+        
+        # Add to message
+        message = "Great stream today!"
+        formatted = add_emotion_emote(message, emotion, available)
+        print(f"Formatted: {formatted}")
+        
+        # Rich multi-emote
+        rich = format_message_with_emotions(message, state, available, max_emotes=2)
+        print(f"Rich format: {rich}")
+
+
+================================================================================
+FILE: MedlarTV/core/emotional_system.py
+================================================================================
+
+"""
+MedlarTV Advanced Emotional System
+Dynamic, human-like emotional state with complex mood interactions
+"""
+
+import yaml
+import os
+import time
+import math
+from datetime import datetime
+from typing import Dict, Tuple, Optional
+from pathlib import Path
+
+# Emotional System Configuration
+HERE = os.path.dirname(os.path.abspath(__file__))
+EMOTION_PATH = os.path.normpath(os.path.join(HERE, "..", "data", "emotions.yaml"))
+
+# --- Expanded Emotion Set ---
+# Each emotion has a baseline and current value (0.0 to 1.0)
+EMOTIONS = {
+    # Core Emotions
+    "happiness": {"baseline": 0.5, "decay_rate": 0.95, "keywords": ["happy", "joy", "great", "awesome", "love", "yay", "fun"]},
+    "sadness": {"baseline": 0.2, "decay_rate": 0.98, "keywords": ["sad", "cry", "miss", "hurt", "pain", "depressed"]},
+    "anger": {"baseline": 0.1, "decay_rate": 0.90, "keywords": ["angry", "mad", "hate", "annoyed", "pissed", "furious"]},
+    "fear": {"baseline": 0.1, "decay_rate": 0.95, "keywords": ["scared", "afraid", "worried", "anxious", "nervous"]},
+    
+    # Social Emotions
+    "excitement": {"baseline": 0.4, "decay_rate": 0.92, "keywords": ["hype", "excited", "omg", "wow", "amazing", "pogchamp"]},
+    "gratitude": {"baseline": 0.3, "decay_rate": 0.97, "keywords": ["thanks", "thank you", "grateful", "appreciate"]},
+    "jealousy": {"baseline": 0.1, "decay_rate": 0.96, "keywords": ["jealous", "envy", "wish i had", "lucky"]},
+    "pride": {"baseline": 0.3, "decay_rate": 0.96, "keywords": ["proud", "achievement", "accomplished", "nailed it"]},
+    
+    # Mood States
+    "chill": {"baseline": 0.5, "decay_rate": 0.99, "keywords": ["chill", "relax", "calm", "vibing", "zen"]},
+    "supportive": {"baseline": 0.6, "decay_rate": 0.98, "keywords": ["support", "help", "encourage", "you got this"]},
+    "snarky": {"baseline": 0.3, "decay_rate": 0.94, "keywords": ["lol", "bruh", "sure", "whatever", "ok buddy"]},
+    
+    # Energy States
+    "energetic": {"baseline": 0.4, "decay_rate": 0.93, "keywords": ["let's go", "energy", "pumped", "ready"]},
+    "tired": {"baseline": 0.2, "decay_rate": 0.96, "keywords": ["tired", "exhausted", "sleepy", "drained"]},
+    "stressed": {"baseline": 0.2, "decay_rate": 0.94, "keywords": ["stress", "overwhelmed", "too much", "ugh"]},
+    
+    # Connection States
+    "lonely": {"baseline": 0.1, "decay_rate": 0.97, "keywords": ["lonely", "alone", "miss you", "where is everyone"]},
+    "connected": {"baseline": 0.5, "decay_rate": 0.98, "keywords": ["together", "community", "squad", "fam"]},
+}
+
+# --- Emotional Relationships ---
+# When one emotion increases, others are affected
+EMOTION_INFLUENCES = {
+    "happiness": {"sadness": -0.3, "anger": -0.2, "fear": -0.1, "excitement": 0.2, "connected": 0.1},
+    "sadness": {"happiness": -0.3, "excitement": -0.2, "energetic": -0.1, "lonely": 0.2},
+    "anger": {"happiness": -0.2, "chill": -0.3, "snarky": 0.1, "stressed": 0.2},
+    "fear": {"chill": -0.2, "stressed": 0.2, "energetic": -0.1},
+    "excitement": {"happiness": 0.2, "energetic": 0.3, "tired": -0.2, "chill": -0.1},
+    "jealousy": {"happiness": -0.1, "anger": 0.1, "sadness": 0.1},
+    "gratitude": {"happiness": 0.2, "connected": 0.2, "supportive": 0.1},
+    "chill": {"stressed": -0.3, "anger": -0.2, "tired": 0.1},
+    "supportive": {"happiness": 0.1, "connected": 0.2, "pride": 0.1},
+    "stressed": {"chill": -0.2, "tired": 0.1, "anger": 0.1},
+    "lonely": {"connected": -0.3, "sadness": 0.2},
+    "connected": {"lonely": -0.3, "happiness": 0.1, "supportive": 0.1},
+}
+
+
+class EmotionalState:
+    """Manages MedlarTV's complex emotional state"""
+    
+    def __init__(self):
+        self.emotions: Dict[str, float] = {}
+        self.last_update = time.time()
+        self.load_state()
+    
+    def load_state(self):
+        """Load emotional state from file or create default"""
+        if not os.path.exists(EMOTION_PATH):
+            self._initialize_emotions()
+            self.save_state()
+        else:
+            with open(EMOTION_PATH, 'r', encoding='utf-8') as f:
+                data = yaml.safe_load(f) or {}
+                self.emotions = data.get('emotions', {})
+                self.last_update = data.get('last_update', time.time())
+            
+            # Ensure all emotions exist
+            for emotion, config in EMOTIONS.items():
+                if emotion not in self.emotions:
+                    self.emotions[emotion] = config['baseline']
+    
+    def _initialize_emotions(self):
+        """Set all emotions to baseline"""
+        for emotion, config in EMOTIONS.items():
+            self.emotions[emotion] = config['baseline']
+    
+    def save_state(self):
+        """Save emotional state to file"""
+        os.makedirs(os.path.dirname(EMOTION_PATH), exist_ok=True)
+        data = {
+            'emotions': self.emotions,
+            'last_update': self.last_update,
+            'timestamp': datetime.now().isoformat()
+        }
+        with open(EMOTION_PATH, 'w', encoding='utf-8') as f:
+            yaml.safe_dump(data, f)
+    
+    def apply_decay(self):
+        """Apply natural emotional decay over time (emotions return to baseline)"""
+        current_time = time.time()
+        time_passed = current_time - self.last_update
+        
+        # Apply decay every second
+        if time_passed > 0:
+            for emotion, config in EMOTIONS.items():
+                baseline = config['baseline']
+                decay_rate = config['decay_rate']
+                current_value = self.emotions.get(emotion, baseline)
+                
+                # Move toward baseline (exponential decay)
+                # Faster decay when far from baseline
+                diff = current_value - baseline
+                decay_factor = decay_rate ** time_passed
+                self.emotions[emotion] = baseline + (diff * decay_factor)
+                
+                # Clamp values between 0 and 1
+                self.emotions[emotion] = max(0.0, min(1.0, self.emotions[emotion]))
+            
+            self.last_update = current_time
+    
+    def process_message(self, message: str, sentiment: float = 0.0):
+        """
+        Process a chat message and update emotional state
+        
+        Args:
+            message: The chat message text
+            sentiment: Overall sentiment score (-1.0 to 1.0)
+        """
+        # Apply decay first
+        self.apply_decay()
+        
+        message_lower = message.lower()
+        
+        # Detect emotions from keywords
+        detected_emotions = {}
+        for emotion, config in EMOTIONS.items():
+            keyword_matches = sum(1 for keyword in config['keywords'] if keyword in message_lower)
+            if keyword_matches > 0:
+                # Strength based on keyword frequency
+                strength = min(keyword_matches * 0.2, 0.5)
+                detected_emotions[emotion] = strength
+        
+        # If no keywords detected, use sentiment to adjust base emotions
+        if not detected_emotions:
+            if sentiment > 0.3:
+                detected_emotions['happiness'] = sentiment * 0.3
+                detected_emotions['excitement'] = sentiment * 0.2
+            elif sentiment < -0.3:
+                detected_emotions['sadness'] = abs(sentiment) * 0.2
+                detected_emotions['anger'] = abs(sentiment) * 0.1
+        
+        # Apply detected emotions
+        for emotion, strength in detected_emotions.items():
+            self._adjust_emotion(emotion, strength)
+        
+        self.save_state()
+    
+    def _adjust_emotion(self, emotion: str, amount: float):
+        """
+        Adjust an emotion and apply influences to related emotions
+        
+        Args:
+            emotion: The emotion to adjust
+            amount: Amount to increase (positive) or decrease (negative)
+        """
+        if emotion not in self.emotions:
+            return
+        
+        # Apply direct change
+        self.emotions[emotion] += amount
+        self.emotions[emotion] = max(0.0, min(1.0, self.emotions[emotion]))
+        
+        # Apply influences to related emotions
+        if emotion in EMOTION_INFLUENCES:
+            influences = EMOTION_INFLUENCES[emotion]
+            for influenced_emotion, influence_amount in influences.items():
+                if influenced_emotion in self.emotions:
+                    # Influence is proportional to the change
+                    influence = influence_amount * amount * 0.5
+                    self.emotions[influenced_emotion] += influence
+                    self.emotions[influenced_emotion] = max(0.0, min(1.0, self.emotions[influenced_emotion]))
+    
+    def get_dominant_emotion(self) -> str:
+        """Get the currently strongest emotion"""
+        if not self.emotions:
+            return "chill"
+        return max(self.emotions, key=self.emotions.get)
+    
+    def get_emotional_state(self) -> Dict[str, float]:
+        """Get all current emotion values"""
+        return self.emotions.copy()
+    
+    def get_top_emotions(self, n: int = 3) -> Dict[str, float]:
+        """Get the top N strongest emotions"""
+        sorted_emotions = sorted(self.emotions.items(), key=lambda x: x[1], reverse=True)
+        return dict(sorted_emotions[:n])
+    
+    def get_mood_description(self) -> str:
+        """Get a natural language description of current mood"""
+        top_3 = self.get_top_emotions(3)
+        
+        emotions_list = []
+        for emotion, value in top_3.items():
+            if value > 0.6:
+                intensity = "very"
+            elif value > 0.4:
+                intensity = "moderately"
+            else:
+                intensity = "slightly"
+            emotions_list.append(f"{intensity} {emotion}")
+        
+        return ", ".join(emotions_list)
+    
+    def manual_set_emotion(self, emotion: str, value: float):
+        """Manually set an emotion (for commands)"""
+        if emotion in self.emotions:
+            self.emotions[emotion] = max(0.0, min(1.0, value))
+            self.save_state()
+    
+    def boost_emotion(self, emotion: str, amount: float = 0.3):
+        """Boost a specific emotion (for events like raids, subs)"""
+        self._adjust_emotion(emotion, amount)
+        self.save_state()
+    
+    def reset_to_baseline(self):
+        """Reset all emotions to baseline"""
+        self._initialize_emotions()
+        self.last_update = time.time()
+        self.save_state()
+
+
+# --- Global instance ---
+_emotional_state = None
+
+def get_emotional_system() -> EmotionalState:
+    """Get the global emotional system instance"""
+    global _emotional_state
+    if _emotional_state is None:
+        _emotional_state = EmotionalState()
+    return _emotional_state
+
+
+# --- Convenience functions for backward compatibility ---
+def process_chat_emotion(message: str, sentiment: float = 0.0):
+    """Process a chat message's emotional impact"""
+    system = get_emotional_system()
+    system.process_message(message, sentiment)
+
+
+def get_current_emotion() -> str:
+    """Get the dominant emotion (for mood display)"""
+    system = get_emotional_system()
+    return system.get_dominant_emotion()
+
+
+def get_emotion_state() -> Dict[str, float]:
+    """Get all emotion values"""
+    system = get_emotional_system()
+    return system.get_emotional_state()
+
+
+def boost_emotion(emotion: str, amount: float = 0.3):
+    """Boost an emotion (for special events)"""
+    system = get_emotional_system()
+    system.boost_emotion(emotion, amount)
+
+
+def reset_emotions():
+    """Reset all emotions to baseline"""
+    system = get_emotional_system()
+    system.reset_to_baseline()
+
+
+# --- Example usage ---
+if __name__ == "__main__":
+    print("=" * 60)
+    print("MedlarTV Advanced Emotional System - Demo")
+    print("=" * 60)
+    
+    emo = EmotionalState()
+    
+    print("\n--- Initial State ---")
+    print(f"Dominant: {emo.get_dominant_emotion()}")
+    print(f"Top 3: {emo.get_top_emotions(3)}")
+    
+    print("\n--- Processing Messages ---")
+    messages = [
+        ("OMG THIS IS AMAZING!", 0.9),
+        ("I'm so happy to be here!", 0.8),
+        ("Ugh this is frustrating", -0.6),
+        ("Thanks so much for the help!", 0.7),
+        ("I'm tired and stressed", -0.4),
+    ]
+    
+    for msg, sentiment in messages:
+        print(f"\nMessage: '{msg}'")
+        emo.process_message(msg, sentiment)
+        print(f"Dominant: {emo.get_dominant_emotion()}")
+        print(f"Top 3: {emo.get_top_emotions(3)}")
+        print(f"Description: {emo.get_mood_description()}")
+    
+    print("\n--- Testing Decay (5 seconds) ---")
+    time.sleep(5)
+    emo.apply_decay()
+    print(f"After decay - Dominant: {emo.get_dominant_emotion()}")
+    print(f"Top 3: {emo.get_top_emotions(3)}")
 
 
 ================================================================================
@@ -2643,10 +3320,15 @@ def generate_response(user_message: str, username: str = "Pilot") -> str:
 FILE: MedlarTV/core/main.py
 ================================================================================
 
+"""
+MedlarTV Core API
+FastAPI server for MedlarTV functionality
+"""
+
 from fastapi import FastAPI, Body
 import yaml
 from pathlib import Path
-from MedlarTV.core.memory import load_memory, reset_memory_on_shutdown
+from MedlarTV.core.memory import reset_memory_on_shutdown
 from MedlarTV.core.llm_brain import generate_response
 import atexit
 
@@ -2675,6 +3357,38 @@ def current_mood():
     from MedlarTV.core.memory import get_dominant_weighted_mood
     mood = get_dominant_weighted_mood()
     return {"mood": mood, "status": "operational"}
+
+@app.post("/mood")
+def update_mood(data: dict = Body(...)):
+    """Update MedlarTV's current mood via POST."""
+    from MedlarTV.core.memory import record_mood
+    new_mood = data.get("mood")
+    if new_mood:
+        record_mood(new_mood)
+        return {"mood": new_mood, "status": "updated"}
+    return {"error": "No mood provided", "status": "error"}
+
+@app.get("/emotions")
+def get_emotions():
+    """Get current emotional state (new advanced system)."""
+    try:
+        from MedlarTV.core.emotional_system import get_emotional_system
+        
+        system = get_emotional_system()
+        return {
+            "dominant": system.get_dominant_emotion(),
+            "top_3": system.get_top_emotions(3),
+            "all_emotions": system.get_emotional_state(),
+            "description": system.get_mood_description(),
+            "status": "operational"
+        }
+    except ImportError:
+        # Fallback if emotional system not installed yet
+        from MedlarTV.core.memory import get_dominant_weighted_mood
+        return {
+            "dominant": get_dominant_weighted_mood(),
+            "status": "legacy_mode"
+        }
 
 @app.get("/personality")
 def personality():
@@ -3414,6 +4128,220 @@ def analyze_sentiment(message: str) -> float:
             score *= 1.5
     # clamp between -1 and 1
     return max(-1.0, min(1.0, score / 5))
+
+
+================================================================================
+FILE: MedlarTV/core/sentiment_advanced.py
+================================================================================
+
+"""
+MedlarTV Enhanced Sentiment Analysis
+Works with the advanced emotional system
+"""
+
+import re
+from typing import Dict, Tuple
+
+# --- Expanded Sentiment Lexicon ---
+POSITIVE_WORDS = [
+    "good", "great", "awesome", "amazing", "love", "wonderful", "fantastic",
+    "excellent", "perfect", "best", "brilliant", "outstanding", "superb",
+    "happy", "joy", "excited", "yay", "nice", "cool", "sweet", "fun",
+    "pogchamp", "pog", "lit", "fire", "hype", "epic", "legendary"
+]
+
+NEGATIVE_WORDS = [
+    "bad", "terrible", "awful", "horrible", "worst", "hate", "suck",
+    "sad", "depressed", "cry", "hurt", "pain", "miss", "lonely",
+    "angry", "mad", "annoyed", "frustrating", "ugh", "annoying",
+    "tired", "exhausted", "stressed", "overwhelmed", "anxious", "worried",
+    "scared", "afraid", "fear", "nervous", "disappointed", "lame"
+]
+
+INTENSIFIERS = [
+    "very", "so", "super", "really", "extremely", "incredibly", "absolutely",
+    "totally", "completely", "utterly", "exceptionally", "particularly"
+]
+
+NEGATIONS = ["not", "no", "never", "neither", "nobody", "nothing", "don't", "won't", "can't"]
+
+# Emotion-specific word clusters
+EMOTION_WORDS = {
+    "happiness": ["happy", "joy", "cheerful", "glad", "pleased", "delighted", "smile", "laugh"],
+    "sadness": ["sad", "unhappy", "depressed", "miserable", "gloomy", "down", "cry"],
+    "anger": ["angry", "mad", "furious", "annoyed", "irritated", "pissed", "rage"],
+    "fear": ["scared", "afraid", "fearful", "anxious", "worried", "nervous", "terrified"],
+    "excitement": ["excited", "thrilled", "hyped", "pumped", "stoked", "omg", "wow"],
+    "gratitude": ["thanks", "thank you", "grateful", "appreciate", "thankful"],
+    "jealousy": ["jealous", "envy", "envious", "wish i had"],
+    "pride": ["proud", "accomplished", "achievement", "nailed it", "crushed it"],
+}
+
+# Emoji sentiment mapping
+EMOJI_SENTIMENT = {
+    "😊": 0.5, "😀": 0.6, "😁": 0.7, "🤣": 0.8, "❤️": 0.7, "💖": 0.7,
+    "😢": -0.5, "😭": -0.7, "😞": -0.4, "😔": -0.4,
+    "😠": -0.6, "😡": -0.8, "🤬": -0.9,
+    "😱": -0.6, "😨": -0.5, "😰": -0.5,
+    "🔥": 0.6, "⚡": 0.5, "✨": 0.4, "💯": 0.6,
+    "🙄": -0.3, "😒": -0.4, "😤": -0.5,
+}
+
+
+def analyze_sentiment_advanced(message: str) -> Tuple[float, Dict[str, float]]:
+    """
+    Advanced sentiment analysis with emotion detection
+    
+    Args:
+        message: Chat message to analyze
+    
+    Returns:
+        Tuple of (overall_sentiment, emotion_scores)
+        - overall_sentiment: -1.0 (very negative) to 1.0 (very positive)
+        - emotion_scores: Dict of detected emotions and their strengths
+    """
+    text = message.lower()
+    words = re.findall(r'\b\w+\b', text)
+    
+    # --- Overall Sentiment Score ---
+    score = 0.0
+    word_count = 0
+    
+    # Check for negations
+    negated = False
+    for i, word in enumerate(words):
+        # Check if word is negated
+        if i > 0 and words[i-1] in NEGATIONS:
+            negated = True
+        else:
+            negated = False
+        
+        # Positive words
+        if word in POSITIVE_WORDS:
+            word_count += 1
+            score += -1 if negated else 1
+        
+        # Negative words
+        elif word in NEGATIVE_WORDS:
+            word_count += 1
+            score += 1 if negated else -1  # Negated negative = positive
+        
+        # Intensifiers multiply nearby sentiment
+        elif word in INTENSIFIERS and i < len(words) - 1:
+            next_word = words[i + 1]
+            if next_word in POSITIVE_WORDS:
+                score += 0.5
+            elif next_word in NEGATIVE_WORDS:
+                score -= 0.5
+    
+    # Check for emojis
+    emoji_score = 0.0
+    emoji_count = 0
+    for emoji, value in EMOJI_SENTIMENT.items():
+        if emoji in message:
+            emoji_score += value
+            emoji_count += 1
+    
+    # Combine word and emoji sentiment
+    total_count = word_count + emoji_count
+    if total_count > 0:
+        combined_score = (score + emoji_score) / total_count
+    else:
+        combined_score = 0.0
+    
+    # Clamp between -1 and 1
+    overall_sentiment = max(-1.0, min(1.0, combined_score))
+    
+    # --- Emotion Detection ---
+    emotion_scores = {}
+    
+    for emotion, emotion_keywords in EMOTION_WORDS.items():
+        matches = sum(1 for keyword in emotion_keywords if keyword in text)
+        if matches > 0:
+            # Emotion strength based on keyword frequency and overall sentiment
+            strength = min(matches * 0.15, 0.5)
+            
+            # Adjust by overall sentiment
+            if emotion in ["happiness", "excitement", "gratitude", "pride"]:
+                if overall_sentiment > 0:
+                    strength *= (1 + overall_sentiment * 0.5)
+            elif emotion in ["sadness", "anger", "fear"]:
+                if overall_sentiment < 0:
+                    strength *= (1 + abs(overall_sentiment) * 0.5)
+            
+            emotion_scores[emotion] = min(strength, 1.0)
+    
+    return overall_sentiment, emotion_scores
+
+
+def analyze_sentiment_simple(message: str) -> float:
+    """
+    Simple sentiment analysis (backward compatible)
+    
+    Returns:
+        Sentiment score from -1.0 to 1.0
+    """
+    sentiment, _ = analyze_sentiment_advanced(message)
+    return sentiment
+
+
+def detect_emotional_keywords(message: str) -> Dict[str, int]:
+    """
+    Detect which emotions are mentioned in a message
+    
+    Returns:
+        Dict of emotions and how many keywords matched
+    """
+    text = message.lower()
+    detected = {}
+    
+    for emotion, keywords in EMOTION_WORDS.items():
+        matches = sum(1 for keyword in keywords if keyword in text)
+        if matches > 0:
+            detected[emotion] = matches
+    
+    return detected
+
+
+def get_sentiment_description(sentiment: float) -> str:
+    """Get a text description of sentiment score"""
+    if sentiment >= 0.7:
+        return "very positive"
+    elif sentiment >= 0.3:
+        return "positive"
+    elif sentiment >= -0.3:
+        return "neutral"
+    elif sentiment >= -0.7:
+        return "negative"
+    else:
+        return "very negative"
+
+
+# --- Example usage ---
+if __name__ == "__main__":
+    print("=" * 60)
+    print("Enhanced Sentiment Analysis - Demo")
+    print("=" * 60)
+    
+    test_messages = [
+        "OMG this is absolutely amazing! I love it! 🔥",
+        "I'm so sad and lonely right now 😢",
+        "This is frustrating and annoying ugh",
+        "Thanks so much! You're the best! ❤️",
+        "Not bad, actually pretty good!",
+        "I'm excited but also nervous 😰",
+        "This sucks, I hate it",
+        "Just chilling, nothing special",
+    ]
+    
+    for msg in test_messages:
+        sentiment, emotions = analyze_sentiment_advanced(msg)
+        print(f"\nMessage: '{msg}'")
+        print(f"Sentiment: {sentiment:.2f} ({get_sentiment_description(sentiment)})")
+        if emotions:
+            print(f"Emotions: {emotions}")
+        else:
+            print("Emotions: None detected")
 
 
 ================================================================================
