@@ -35,7 +35,7 @@ commands:
   listcopilots:
     response: "Active Co-Pilots: {copilots}"
   
-  # ⭐ NEW: Stream management commands
+  # Stream management commands
   streaminfo:
     response: "Getting stream info..."
   
@@ -45,7 +45,7 @@ commands:
   game:
     response: "Current game/category"
   
-  # ⭐ NEW: Moderation commands (pilot/mod only)
+  # Moderation commands (pilot/mod only)
   timeout:
     response: "User timed out"
     requires_pilot: true

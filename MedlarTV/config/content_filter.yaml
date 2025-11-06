@@ -1,27 +1,7 @@
-# =============================================================================
-# MedlarTV Content Filter Configuration
-# =============================================================================
 # This file controls what MedlarTV can and cannot say.
-# 
-# HOW TO USE:
-# 1. Add words you DON'T want the bot to say under "blocked_words"
-# 2. Add topics you DON'T want the bot to discuss under "blocked_topics"
-# 3. Adjust response modes (all caps, emoji limits, etc.)
-# 4. The bot will automatically block content that violates these rules
-#
-# EASY TO EDIT - Just add new lines with a dash (-) before each word!
-# Save this file and restart the bot for changes to take effect.
-# =============================================================================
-
-# =============================================================================
-# BLOCKED WORDS - Bot will NEVER say these exact words
-# =============================================================================
-# Add words WITHOUT asterisks/censoring (the filter will block exact matches)
-# Keep this list short and focused on truly harmful slurs/language
-# =============================================================================
 
 blocked_words:
-  # Racial & Ethnic Slurs (add without censoring - filter blocks exact matches)
+  # Racial & Ethnic Slurs
   - "nigger"
   - "nigga"
   - "chink"
@@ -72,14 +52,8 @@ blocked_words:
   - "hebe"
   - "muzzie"
 
-  # NOTE: Common profanity like "bitch", "slut", "cunt" can be context-dependent.
-  # Add them if you want strict filtering, or leave them out for casual streams.
-
-# =============================================================================
 # BLOCKED TOPICS - Bot will refuse to discuss these topics
-# =============================================================================
 # Use descriptive phrases for topics you don't want the bot to engage with
-# =============================================================================
 
 blocked_topics:
   # Violence & Harm
@@ -150,20 +124,16 @@ blocked_topics:
   - "bestiality"
   - "incest content"
 
-  # Dangerous Misinformation (optional - comment out if too restrictive)
+  # Dangerous Misinformation
   - "holocaust denial"
   - "qanon"
   - "vaccine microchips"
   - "flat earth proof"
 
-# =============================================================================
 # RESPONSE MODES - Controls how the bot talks
-# =============================================================================
 
 response_modes:
-  # -------------------------------------------------------------------------
   # ALL CAPS MODE - Bot yells in all caps when asked
-  # -------------------------------------------------------------------------
   all_caps:
     enabled: true
     max_messages: 3           # Number of messages to yell before stopping
@@ -191,16 +161,12 @@ response_modes:
       - "stop caps"
       - "no caps"
     
-  # -------------------------------------------------------------------------
   # EMOJI LIMIT - Prevent emoji spam
-  # -------------------------------------------------------------------------
   emoji_limit:
     enabled: true
     max_per_message: 3        # Maximum emojis per message
 
-# =============================================================================
 # SAFETY SETTINGS
-# =============================================================================
 
 safety:
   # Message length enforcement
@@ -215,9 +181,7 @@ safety:
   # - "banneduser123"
   # - "problematicviewer"
 
-# =============================================================================
-# ADVANCED SETTINGS (Optional)
-# =============================================================================
+# ADVANCED SETTINGS
 
 advanced:
   # Enable/disable specific filter features
@@ -228,14 +192,9 @@ advanced:
   
   # Minimum word length for blocking (prevents false positives)
   min_blocked_word_length: 4
-  
-  # Skip words with asterisks (they're examples, not actual blocks)
-  skip_censored_words: true
 
-# =============================================================================
 # NOTES & TIPS
-# =============================================================================
-# 
+
 # 1. TESTING FILTERS:
 #    Run: python MedlarTV/core/content_filter.py
 #    This will test the filter with sample messages
@@ -254,5 +213,3 @@ advanced:
 # 5. RELOADING CHANGES:
 #    Restart the bot after editing this file
 #    Changes won't apply until restart
-#
-# =============================================================================

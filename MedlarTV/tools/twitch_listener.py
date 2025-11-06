@@ -40,8 +40,6 @@ from MedlarTV.core.twitch_events import (
     get_bits_response,
     add_random_emote
 )
-
-# ⭐ ADD THIS IMPORT - Content Filter
 from MedlarTV.core.content_filter import (
     filter_message,
     should_enable_all_caps,
@@ -80,7 +78,7 @@ recent_msgs = {}
 LAST_REPLY_AT = 0
 COPILOT_CONFIG_PATH = Path("MedlarTV/config/copilots.yaml")
 
-# ⭐ NEW: Track the socket globally so we can use it in remove_copilot
+# Track the socket globally so we can use it in remove_copilot
 SOCKET = None
 
 # --- Config Variables (populated by load_config) ---
@@ -147,7 +145,7 @@ def add_copilot(username: str) -> bool:
             SOCKET.send(f"JOIN {copilot_channel}\r\n".encode("utf-8"))
             log.info(f"✅ Joined channel: {copilot_channel}")
             
-            # ⭐ NEW: Register with WebSocket bridge
+            # Register with WebSocket bridge
             try:
                 register_channel(copilot_channel)
                 log.info(f"✅ Registered with bridge: {copilot_channel}")
@@ -186,7 +184,7 @@ def remove_copilot(username: str) -> bool:
             SOCKET.send(f"PART {copilot_channel}\r\n".encode("utf-8"))
             log.info(f"❌ Left channel: {copilot_channel}")
             
-            # ⭐ NEW: Unregister from WebSocket bridge
+            # Unregister from WebSocket bridge
             try:
                 ws_send({
                     "event": "unregister",
@@ -468,7 +466,7 @@ def connect():
     sock.send(f"JOIN {CHANNEL}\r\n".encode("utf-8"))
     log.info(f"Connected to {CHANNEL} as {NICK} (Pilot: {PILOT})")
 
-    # ⭐ Store socket globally first so add_copilot can use it
+    # Store socket globally first so add_copilot can use it
     SOCKET = sock
 
     # Join all co-pilot channels
@@ -476,8 +474,8 @@ def connect():
         copilot_channel = f"#{copilot}"
         sock.send(f"JOIN {copilot_channel}\r\n".encode("utf-8"))
         log.info(f"Joined Co-Pilot channel: {copilot_channel}")
-        
-        # ⭐ NEW: Register each co-pilot channel with bridge
+
+        # Register each co-pilot channel with bridge
         try:
             register_channel(copilot_channel)
             log.info(f"Registered with bridge: {copilot_channel}")
@@ -522,7 +520,7 @@ def listen(sock):
         if not resp.strip():
             continue
 
-        # ⭐ NEW: Detect Twitch events FIRST (before tags parsing)
+        # Detect Twitch events FIRST (before tags parsing)
         raid_info = detect_raid(resp)
         if raid_info:
             response = get_raid_response(raid_info)
@@ -599,7 +597,7 @@ def listen(sock):
                 role_tag = {"pilot": "[PILOT]", "copilot": "[CO-PILOT]", "user": ""}.get(role, "")
                 log.info(f"[Twitch→Core] {role_tag} {username}: {message}")
 
-                # ⭐ NEW: Detect language
+                # Detect language
                 detected_language = detect_language(message)
 
                 # Store message in recent history
@@ -609,7 +607,7 @@ def listen(sock):
                         oldest = next(iter(recent_msgs))
                         recent_msgs.pop(oldest, None)
 
-                # ⭐ NEW: Check moderation FIRST
+                # Check moderation FIRST
                 mod_check = check_message(username, message, role)
                 if not mod_check["is_allowed"]:
                     log.warning(f"[Mod] Blocked message from {username}: {mod_check['reason']}")
@@ -623,7 +621,7 @@ def listen(sock):
                     
                     continue
 
-                # ⭐ NEW: Handle mod commands
+                # Handle mod commands
                 if is_mod_command(message):
                     mod_response = handle_mod_command(sock, CHANNEL, username, message, role)
                     if mod_response:
@@ -633,7 +631,7 @@ def listen(sock):
 
                 # Handle regular commands
                 if message.startswith("!"):
-                    # ⭐ NEW: Stream management commands
+                    # Stream management commands
                     if message.lower().startswith("!streaminfo"):
                         stream_info = get_stream_info()
                         response = format_stream_info(stream_info)
@@ -690,7 +688,7 @@ def listen(sock):
                     log.info("[Cooldown] Skipping reply (rate limited)")
                     continue
 
-                # ⭐ NEW: Try smart template response first
+                # Try smart template response first
                 template_response = get_smart_response(message, username, current_mood)
                 
                 if template_response:
@@ -728,14 +726,14 @@ def listen(sock):
                 # Format with mood styling
                 formatted_reply = format_reply_with_mood(filtered_reply)
                 
-                # ⭐ NEW: Add language indicator
+                # Add language indicator
                 if detected_language != "en":
                     formatted_reply = add_language_indicator(formatted_reply, detected_language)
                 
                 # Send the filtered reply
                 send_reply(sock, formatted_reply, msg_id if reply_parent_msg_id else None)
-                
-                # ⭐ NEW: Log the interaction
+
+                # Log the interaction
                 log_interaction(username, message, formatted_reply, current_mood, detected_language)
 
             except Exception as e:

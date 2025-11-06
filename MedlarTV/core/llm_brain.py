@@ -12,9 +12,7 @@ import requests
 from MedlarTV.core.memory import get_dominant_weighted_mood
 from MedlarTV.core.context import get_contextual_mix
 
-# -----------------------------
 # Config
-# -----------------------------
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434")
 MODEL_NAME = os.getenv("MODEL_NAME", "llama3")
 MAX_HISTORY = int(os.getenv("MEDLARTV_MAX_HISTORY", "10"))

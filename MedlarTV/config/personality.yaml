@@ -13,14 +13,14 @@ personality:
     - "Haha true {user}! {emoji}"
     - "You called, {user}? {emoji}"
   
-  # ⭐ NEW: Learning preferences (Quick Win 2)
+  # Learning preferences (Quick Win 2)
   learning:
     adapt_tone: true
     remember_users: true
     favorite_topics: []
     user_preferences: {}
   
-  # ⭐ NEW: Response Templates
+  # Response Templates
   response_templates:
     greeting:
       - "Hey {user}! 👋 What's up?"
@@ -53,7 +53,7 @@ personality:
       - "I see what you did there 😉"
       - "Interesting take, {user} 🤨"
   
-  # ⭐ NEW: Multi-Language Support
+  # Multi-Language Support
   languages:
     en: "English"
     es: "Spanish"
@@ -91,8 +91,8 @@ personality:
       ja: "さようなら"
       ko: "안녕히 가세요"
       pt: "Tchau"
-  
-  # ⭐ NEW: Twitch Emote Support
+      
+  # Twitch Emote Support
   emotes:
     enable: true
     custom_emotes: []  # Will be populated by bot
