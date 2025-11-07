@@ -1,19 +1,6 @@
-# MedlarTV Core Dependencies
-requests==2.31.0
-
-# Web Framework & Server
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-
-# WebSocket Support
+fastapi==0.115.0
+uvicorn==0.30.6
 websockets==12.0
-
-# Configuration & Environment
-pyyaml==6.0.1
-python-dotenv==1.0.0
-
-# Terminal Styling
 colorama==0.4.6
-
-# AI / LLM Integration
-anthropic==0.18.1
+pyyaml==6.0.2
+python-dotenv==1.0.1

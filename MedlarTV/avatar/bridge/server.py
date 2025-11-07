@@ -70,8 +70,7 @@ async def handler(websocket):
             except json.JSONDecodeError:
                 print(f"[Bridge] Invalid JSON (truncated): {message[:120]}")
                 continue
-            
-            # Handle incoming events
+
             event = data.get("event")
 
             if event == "register":
@@ -80,14 +79,12 @@ async def handler(websocket):
                     CHANNEL_REGISTRY.setdefault(channel, []).append(websocket)
                     print(f"[Bridge] ✓ Channel registered: {channel}")
 
-            # ⭐ NEW: Handle unregister event
             elif event == "unregister":
                 channel = data.get("channel", "").lower()
                 if channel and channel in CHANNEL_REGISTRY:
                     if websocket in CHANNEL_REGISTRY[channel]:
                         CHANNEL_REGISTRY[channel].remove(websocket)
                         print(f"[Bridge] ✗ Channel unregistered: {channel}")
-                        # Clean up empty channel entries
                         if not CHANNEL_REGISTRY[channel]:
                             del CHANNEL_REGISTRY[channel]
 
@@ -103,17 +100,14 @@ async def handler(websocket):
         await unregister(websocket)
 
 
-# --- Server Runner ---
-def run_server(host="0.0.0.0", port=8765):
+# --- ✅ Async Server Runner (safe for FastAPI) ---
+async def run_server(host="0.0.0.0", port=8765):
+    """Run the WebSocket bridge server inside an existing asyncio loop."""
     print(f"[Bridge] Listening on ws://{host}:{port}")
-
-    async def main():
-        async with websockets.serve(handler, host, port):
-            while True:
-                await asyncio.sleep(1)
-
-    asyncio.run(main())
+    async with websockets.serve(handler, host, port):
+        await asyncio.Future()  # run forever
 
 
+# --- Optional standalone entrypoint ---
 if __name__ == "__main__":
-    run_server()
+    asyn
