@@ -14,7 +14,6 @@ ENABLE_TRANSLATION = os.getenv("ENABLE_TRANSLATION", "true").lower() == "true"
 DEFAULT_LANGUAGE = os.getenv("DEFAULT_LANGUAGE", "en")
 SUPPORTED_LANGUAGES = os.getenv("SUPPORTED_LANGUAGES", "en,es,fr,de,ja,ko,pt").split(",")
 
-
 def load_translations() -> Dict:
     """Load translations from personality.yaml"""
     config_path = Path("MedlarTV/config/personality.yaml")
@@ -31,7 +30,6 @@ def load_translations() -> Dict:
     except Exception as e:
         print(f"[Translation] Error loading translations: {e}")
         return {}
-
 
 def detect_language(text: str) -> str:
     """
@@ -80,7 +78,6 @@ def detect_language(text: str) -> str:
     # Default to English
     return DEFAULT_LANGUAGE
 
-
 def translate_phrase(phrase_key: str, target_language: str = None) -> str:
     """
     Translate a common phrase to target language.
@@ -113,7 +110,6 @@ def translate_phrase(phrase_key: str, target_language: str = None) -> str:
     
     return phrase_translations[target_language]
 
-
 def translate_message(text: str, target_language: str = None) -> str:
     """
     Translate a full message to target language.
@@ -132,7 +128,6 @@ def translate_message(text: str, target_language: str = None) -> str:
     # In production, call translation API here
     print(f"[Translation] Would translate '{text}' to {target_language}")
     return text
-
 
 def add_language_indicator(text: str, language: str) -> str:
     """Add a small language flag emoji to responses"""
@@ -155,7 +150,6 @@ def add_language_indicator(text: str, language: str) -> str:
         return f"{flag} {text}"
     return text
 
-
 def get_multilingual_greeting(username: str, language: str = None) -> str:
     """Get a greeting in the user's language"""
     if language is None:
@@ -164,7 +158,6 @@ def get_multilingual_greeting(username: str, language: str = None) -> str:
     greeting = translate_phrase("greeting", language)
     return f"{greeting} {username}!"
 
-
 def get_multilingual_thanks(language: str = None) -> str:
     """Get a thank you message in the user's language"""
     if language is None:
@@ -172,6 +165,28 @@ def get_multilingual_thanks(language: str = None) -> str:
     
     return translate_phrase("thanks", language)
 
+def llama_refine_static_translation(raw_text: str, target_lang: str) -> str:
+    """
+    Optionally refine a short static translation (like greetings or UI phrases)
+    using local Llama-3 for natural tone and phrasing.
+    100% free and offline.
+    """
+    try:
+        from MedlarTV.core.llm_brain import generate_response as llama_refine
+        from MedlarTV.core.translation_command import _lang_human_name
+
+        prompt = (
+            f"Make this short system message sound natural and idiomatic in "
+            f"{_lang_human_name(target_lang)}. Keep the same meaning. "
+            f"Do not add explanations or extra text.\n\nMessage:\n{raw_text}"
+        )
+        refined = llama_refine(prompt, username="System")
+        if not refined or "Ollama model server offline" in refined:
+            return raw_text
+        return refined.strip().strip('"').strip("“”")
+    except Exception as e:
+        print(f"[Translation] Llama refine error: {e}")
+        return raw_text
 
 # Example usage and testing
 if __name__ == "__main__":

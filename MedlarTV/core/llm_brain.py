@@ -44,6 +44,13 @@ def check_ollama_health() -> bool:
     except:
         return False
 
+def is_ollama_online() -> bool:
+    """Quick, silent connectivity check for use by translation module."""
+    try:
+        r = requests.get(f"{OLLAMA_URL}/api/tags", timeout=1)
+        return r.ok
+    except Exception:
+        return False
 
 def get_system_prompt() -> str:
     """Generate dynamic system prompt based on current mood and personality."""
@@ -160,7 +167,9 @@ def generate_response(user_message: str, username: str = "Pilot") -> str:
     """Generate response with context, mood, and personality."""
     if not check_ollama_health():
         return "Ollama model server offline or unreachable."
-
+  # Lightweight pre-check for translator use
+    if not is_ollama_online():
+        return "Ollama model server offline or unreachable."
     system_prompt = get_system_prompt()
 
     add_to_history("user", f"{username}: {user_message}")

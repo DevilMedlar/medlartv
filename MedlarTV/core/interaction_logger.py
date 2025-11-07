@@ -71,29 +71,39 @@ def log_interaction(
     except Exception as e:
         print(f"[Logger] Error logging interaction: {e}")
 
-
-def log_command(username: str, command: str, args: str = None, response: str = None, success: bool = True):
-    """Log a command usage with optional arguments and response."""
+def log_command(username: str, command: str, success: bool = True):
+    """
+    Log a command usage event with success status.
+    Compatible with MedlarTV Twitch command system.
+    """
     if not ENABLE_LOGGING:
         return
-    
+
     try:
         log_path = ensure_log_directory()
         log_file = log_path / "commands.jsonl"
-        
+
         log_entry = {
             "timestamp": datetime.now().isoformat(),
             "user": username,
             "command": command,
             "success": success
         }
-        
+
+        # Optional: pretty human-readable backup line
+        readable = f"[{log_entry['timestamp']}] {username} → {command} {'✅' if success else '❌'}\n"
+
+        # Append both JSON and readable form
         with open(log_file, "a", encoding="utf-8") as f:
-            f.write(json.dumps(log_entry) + "\n")
-        
+            f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
+
+        # Also log to a quick human-readable summary
+        summary_file = log_path / "commands.log"
+        with open(summary_file, "a", encoding="utf-8") as f:
+            f.write(readable)
+
     except Exception as e:
         print(f"[Logger] Error logging command: {e}")
-
 
 def log_mood_change(old_mood: str, new_mood: str, trigger: str = "auto"):
     """Log mood changes"""

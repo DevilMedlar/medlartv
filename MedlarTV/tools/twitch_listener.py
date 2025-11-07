@@ -471,7 +471,10 @@ def handle_command(sock, username, message, msg_id=None, badges=None):
     elif cmd in ["t", "translate", "trans"]:
         response = handle_translate_command(args, username)
         send_reply(SOCKET, response, msg_id)
-        log_command(username, cmd, success=True)  # ✅ correct
+
+        # 🧠 Enhanced logging: note if Llama-3 refinement was used
+        refined_tag = "llama3_refined" if "✨" in response else "raw"
+        log_command(username, f"{cmd}({refined_tag})", success=True)
         return
 
     # NEW: Translation Help

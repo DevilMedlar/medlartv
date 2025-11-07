@@ -14,19 +14,24 @@ def load_memory():
     with open(MEMORY_PATH, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
-
 def save_memory(data):
     with open(MEMORY_PATH, "w", encoding="utf-8") as f:
         yaml.safe_dump(data, f)
 
+def record_mood(mood, source: str = "user"):
+    """
+    Record a mood occurrence in persistent memory.
+    Translator/System moods are ignored to prevent pollution.
+    """
+    # Skip translator/system updates
+    if source.lower() in ["translator", "system"]:
+        return
 
-def record_mood(mood):
     data = load_memory()
     moods = data["personality_memory"]["mood_weights"]
     moods[mood] = moods.get(mood, 0) + 1
     data["personality_memory"]["last_update"] = int(time.time())
     save_memory(data)
-
 
 def get_dominant_mood():
     data = load_memory()
@@ -34,7 +39,6 @@ def get_dominant_mood():
     if not moods:
         return "chill"
     return max(moods, key=moods.get)
-
 
 def get_dominant_weighted_mood():
     data = load_memory()
@@ -44,7 +48,6 @@ def get_dominant_weighted_mood():
     total = sum(moods.values())
     weighted = {m: v / total for m, v in moods.items()}
     return max(weighted, key=weighted.get)
-
 
 def reset_memory_on_shutdown():
     """Reset MedlarTV's personality memory to neutral baseline on shutdown."""

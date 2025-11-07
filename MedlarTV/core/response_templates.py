@@ -229,3 +229,27 @@ if __name__ == "__main__":
     print("Hype:", get_hype("TestUser"))
     print("Support:", get_support("TestUser"))
     print("Sarcastic:", get_sarcastic("TestUser"))
+
+# 🌍 Optional Llama-3 Refinement for Template Output
+def refine_template_with_llama3(text: str, target_lang: str = "en") -> str:
+    """
+    Optionally refine a template output in another language using local Llama-3.
+    Keeps tone natural and idiomatic for multilingual chats.
+    """
+    try:
+        from MedlarTV.core.llm_brain import generate_response as llama_refine
+        from MedlarTV.core.translation_command import _lang_human_name
+
+        prompt = (
+            f"Rewrite this short message so it sounds natural and idiomatic in "
+            f"{_lang_human_name(target_lang)}. "
+            f"Keep the same tone and emoji usage. Do not translate literally. "
+            f"Message:\n{text}"
+        )
+        refined = llama_refine(prompt, username="Translator")
+        if not refined or "Ollama model server offline" in refined:
+            return text
+        return refined.strip().strip('"').strip("“”")
+    except Exception as e:
+        print(f"[Templates] Llama refine error: {e}")
+        return text
