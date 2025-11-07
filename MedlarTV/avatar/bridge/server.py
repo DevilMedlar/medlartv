@@ -110,4 +110,5 @@ async def run_server(host="0.0.0.0", port=8765):
 
 # --- Optional standalone entrypoint ---
 if __name__ == "__main__":
-    asyn
+    import asyncio
+    asyncio.run(run_server())

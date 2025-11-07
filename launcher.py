@@ -156,11 +156,6 @@ class MedlarTVLauncher:
                 "wait": 4
             },
             {
-                "name": "WebSocket Bridge",
-                "command": f"{self.python_cmd} MedlarTV/avatar/bridge/server.py",
-                "wait": 2
-            },
-            {
                 "name": "Twitch Listener",
                 "command": f"{self.python_cmd} MedlarTV/tools/twitch_listener.py",
                 "wait": 2
