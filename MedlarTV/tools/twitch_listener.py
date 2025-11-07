@@ -12,7 +12,7 @@ from MedlarTV.core.memory import record_mood, get_dominant_weighted_mood
 from MedlarTV.core.mood_system import blended_phrase
 from MedlarTV.core.mood_system import record_session_mood
 from MedlarTV.core.fuzzy_trigger import should_respond as fuzzy_should_respond, find_triggers_in_message
-from MedlarTV.avatar.bridge.client import register_channel, send_mood_update, ws_sendd
+from MedlarTV.avatar.bridge.client import register_channel, send_mood_update, ws_send
 from MedlarTV.core.translation import detect_language, get_multilingual_greeting, add_language_indicator
 from MedlarTV.core.response_templates import get_smart_response
 from MedlarTV.core.interaction_logger import log_interaction, log_command, log_mood_change, log_error
