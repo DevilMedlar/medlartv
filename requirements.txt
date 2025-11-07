@@ -1,4 +1,5 @@
 # MedlarTV Core Dependencies
+requests==2.31.0
 
 # Web Framework & Server
 fastapi==0.104.1
