@@ -72,8 +72,8 @@ def log_interaction(
         print(f"[Logger] Error logging interaction: {e}")
 
 
-def log_command(username: str, command: str, success: bool = True):
-    """Log a command usage"""
+def log_command(username: str, command: str, args: str = None, response: str = None, success: bool = True):
+    """Log a command usage with optional arguments and response."""
     if not ENABLE_LOGGING:
         return
     

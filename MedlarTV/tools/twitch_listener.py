@@ -471,9 +471,9 @@ def handle_command(sock, username, message, msg_id=None, badges=None):
     elif cmd in ["t", "translate", "trans"]:
         response = handle_translate_command(args, username)
         send_reply(SOCKET, response, msg_id)
-        log_command(username, cmd, args, response)
+        log_command(username, cmd, success=True)  # ✅ correct
         return
-    
+
     # NEW: Translation Help
     elif cmd in ["tlang", "translatelangs", "languages"]:
         langs = get_supported_languages_list()
