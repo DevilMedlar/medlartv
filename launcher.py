@@ -79,27 +79,24 @@ class MedlarTVLauncher:
         logs_dir = self.root_dir / 'logs'
         logs_dir.mkdir(exist_ok=True)
     
-    def _start_component(self, name: str, script_path: str, log_file: str) -> Optional[subprocess.Popen]:
+    def _start_component(self, name: str, command: str, wait_time: int = 2) -> Optional[subprocess.Popen]:
         """Start a component and return the process"""
         print(f"{Colors.CYAN}[START] {name}...{Colors.NC}")
         
-        full_path = self.root_dir / script_path
-        if not full_path.exists():
-            print(f"{Colors.RED}[FAIL] {script_path} not found{Colors.NC}")
-            return None
-        
-        log_path = self.root_dir / 'logs' / log_file
-        
         try:
-            with open(log_path, 'w') as log:
-                process = subprocess.Popen(
-                    [self.python_cmd, str(full_path)],
-                    stdout=log,
-                    stderr=subprocess.STDOUT,
-                    cwd=str(self.root_dir)
-                )
+            # CRITICAL FIX: Set PYTHONPATH environment variable (this was missing!)
+            env = os.environ.copy()
+            env['PYTHONPATH'] = str(self.root_dir)
             
-            time.sleep(2)
+            # CRITICAL FIX: Use shell=True like the working launcher
+            process = subprocess.Popen(
+                command,
+                shell=True,
+                env=env,
+                cwd=str(self.root_dir)
+            )
+            
+            time.sleep(wait_time)
             
             # Check if process is still running
             if process.poll() is None:
@@ -146,36 +143,57 @@ class MedlarTVLauncher:
         
         self._create_logs_dir()
         
-        # Start components
+        # Start components (using shell commands like the working launcher)
         components = [
-            ("Core API", "MedlarTV/core/main.py", "core.log"),
-            ("WebSocket Bridge", "MedlarTV/avatar/bridge/server.py", "bridge.log"),
-            ("Twitch Listener", "MedlarTV/tools/twitch_listener.py", "twitch.log"),
+            {
+                "name": "Ollama Server",
+                "command": "ollama serve",
+                "wait": 3
+            },
+            {
+                "name": "Core API (FastAPI)",
+                "command": f"{self.python_cmd} MedlarTV/core/main.py",
+                "wait": 4
+            },
+            {
+                "name": "WebSocket Bridge",
+                "command": f"{self.python_cmd} MedlarTV/avatar/bridge/server.py",
+                "wait": 2
+            },
+            {
+                "name": "Twitch Listener",
+                "command": f"{self.python_cmd} MedlarTV/tools/twitch_listener.py",
+                "wait": 2
+            }
         ]
         
-        for name, script, log in components:
-            process = self._start_component(name, script, log)
+        for component in components:
+            process = self._start_component(
+                component["name"], 
+                component["command"], 
+                component["wait"]
+            )
             if process:
                 self.processes.append(process)
             else:
+                print(f"\n{Colors.RED}[ABORT] Failed to start {component['name']}{Colors.NC}")
+                print(f"{Colors.RED}[ABORT] Shutting down already running components...{Colors.NC}\n")
                 self._stop_all()
                 sys.exit(1)
         
         # Show status
-        print(f"\n{Colors.CYAN}════════════════════════════════════════════════════════════{Colors.NC}")
+        print(f"\n{Colors.CYAN}{'='*60}{Colors.NC}")
         print(f"{Colors.GREEN}MedlarTV Systems Operational{Colors.NC}")
-        print(f"{Colors.CYAN}════════════════════════════════════════════════════════════{Colors.NC}\n")
+        print(f"{Colors.CYAN}{'='*60}{Colors.NC}\n")
         
         print(f"{Colors.YELLOW}Active Components:{Colors.NC}")
-        for process in self.processes:
-            print(f"  🟢 PID: {process.pid}")
+        for i, process in enumerate(self.processes):
+            status = "🟢 RUNNING" if process.poll() is None else "🔴 STOPPED"
+            print(f"  {status} PID: {process.pid}")
         
-        print(f"\n{Colors.YELLOW}Logs:{Colors.NC}")
-        print(f"  📄 logs/core.log")
-        print(f"  📄 logs/bridge.log")
-        print(f"  📄 logs/twitch.log")
-        
-        print(f"\n{Colors.CYAN}Press Ctrl+C to shutdown all systems{Colors.NC}\n")
+        print(f"\n{Colors.CYAN}Commands:{Colors.NC}")
+        print(f"  {Colors.GREEN}Ctrl+C{Colors.NC} - Shutdown all systems")
+        print(f"\n{Colors.YELLOW}Press Ctrl+C to shutdown...{Colors.NC}\n")
         
         # Wait for interrupt
         try:
@@ -184,7 +202,8 @@ class MedlarTVLauncher:
                 # Check if any process died
                 for process in self.processes:
                     if process.poll() is not None:
-                        print(f"{Colors.RED}[ERROR] A component crashed!{Colors.NC}")
+                        print(f"{Colors.RED}[ALERT] A component stopped unexpectedly!{Colors.NC}")
+                        print(f"{Colors.YELLOW}[ALERT] Initiating emergency shutdown...{Colors.NC}\n")
                         self._stop_all()
                         sys.exit(1)
         except KeyboardInterrupt:
@@ -197,4 +216,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        print(f"\n{Colors.RED}[FATAL] Unexpected error: {e}{Colors.NC}\n")
+        sys.exit(1)

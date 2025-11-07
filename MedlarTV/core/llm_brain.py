@@ -10,7 +10,7 @@ import time
 import requests
 
 from MedlarTV.core.memory import get_dominant_weighted_mood
-from mood_system import get_contextual_mix
+from MedlarTV.core.mood_system import get_contextual_mix
 
 # Config
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434")

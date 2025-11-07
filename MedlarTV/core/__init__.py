@@ -20,15 +20,15 @@ from .llm_brain import (
     clear_history
 )
 
-# Context Tracking
-from mood_system import (
+# Context Tracking & Expression (from mood_system)
+from .mood_system import (
     record_session_mood,
-    get_contextual_mix
+    get_contextual_mix,
+    blended_phrase
 )
 
-# Expression & Sentiment (Legacy)
-from mood_system import blended_phrase
-from .sentiment import analyze_sentiment
+# Sentiment Analysis (using sentiment_advanced as replacement for deleted sentiment.py)
+from .sentiment_advanced import analyze_sentiment_simple as analyze_sentiment
 
 # Fuzzy Trigger Detection
 from .fuzzy_trigger import (

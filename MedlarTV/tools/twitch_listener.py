@@ -9,8 +9,8 @@ from pathlib import Path
 
 from MedlarTV.core.translation_command import handle_translate_command, get_supported_languages_list
 from MedlarTV.core.memory import record_mood, get_dominant_weighted_mood
-from mood_system import blended_phrase
-from mood_system import record_session_mood
+from MedlarTV.core.mood_system import blended_phrase
+from MedlarTV.core.mood_system import record_session_mood
 from MedlarTV.core.fuzzy_trigger import should_respond as fuzzy_should_respond, find_triggers_in_message
 from MedlarTV.avatar.bridge_client import register_channel, send_mood_update, ws_send
 from MedlarTV.core.translation import detect_language, get_multilingual_greeting, add_language_indicator
