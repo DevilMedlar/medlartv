@@ -1,220 +1,192 @@
-"""
-MedlarTV Translation Module
-Multi-language support with automatic detection
-"""
+# MedlarTV / translation.py
+from __future__ import annotations
+import threading
+from typing import Optional, Tuple, Dict, Set, List
 
-import os
-import re
-from typing import Optional, Dict
-from pathlib import Path
-import yaml
+try:
+    import argostranslate.package as argo_pkg
+    import argostranslate.translate as argo_tx
+except Exception as e:
+    argo_pkg = None
+    argo_tx = None
+    _import_error = e
+else:
+    _import_error = None
 
-# Check if translation is enabled
-ENABLE_TRANSLATION = os.getenv("ENABLE_TRANSLATION", "true").lower() == "true"
-DEFAULT_LANGUAGE = os.getenv("DEFAULT_LANGUAGE", "en")
-SUPPORTED_LANGUAGES = os.getenv("SUPPORTED_LANGUAGES", "en,es,fr,de,ja,ko,pt").split(",")
+# Optional auto-detect (nice-to-have). If not installed, we’ll fallback to 'en'.
+try:
+    from langdetect import detect as _detect_lang  # provided by your libretranslate deps, but works standalone too
+except Exception:
+    _detect_lang = None
 
-def load_translations() -> Dict:
-    """Load translations from personality.yaml"""
-    config_path = Path("MedlarTV/config/personality.yaml")
-    
-    if not config_path.exists():
-        return {}
-    
-    try:
-        with open(config_path, 'r', encoding='utf-8') as f:
-            config = yaml.safe_load(f) or {}
-        
-        personality = config.get("personality", {})
-        return personality.get("translations", {})
-    except Exception as e:
-        print(f"[Translation] Error loading translations: {e}")
-        return {}
+# Normalize user aliases -> Argos codes
+# Argos typically uses ISO like: en, es, fr, de, it, pt, ru, ja, ko, zh
+LANG_ALIASES: Dict[str, str] = {
+    # English and friends
+    "en": "en",
 
-def detect_language(text: str) -> str:
-    """
-    Simple language detection based on character sets.
-    For production, consider using langdetect library.
-    """
-    if not ENABLE_TRANSLATION:
-        return DEFAULT_LANGUAGE
-    
-    # Japanese characters
-    if re.search(r'[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]', text):
-        return "ja"
-    
-    # Korean characters
-    if re.search(r'[\uAC00-\uD7A3]', text):
-        return "ko"
-    
-    # Chinese characters (simplified/traditional)
-    if re.search(r'[\u4E00-\u9FFF]', text):
-        return "zh"
-    
-    # Cyrillic (Russian, etc.)
-    if re.search(r'[\u0400-\u04FF]', text):
-        return "ru"
-    
-    # Spanish indicators
-    spanish_words = ['hola', 'gracias', 'por favor', 'buenos', 'días', 'sí', 'no', 'qué']
-    if any(word in text.lower() for word in spanish_words):
-        return "es"
-    
-    # French indicators
-    french_words = ['bonjour', 'merci', 'oui', 'non', 'ça', 'très', 'être']
-    if any(word in text.lower() for word in french_words):
-        return "fr"
-    
-    # German indicators
-    german_words = ['hallo', 'danke', 'bitte', 'ja', 'nein', 'wie', 'ist', 'der', 'die', 'das']
-    if any(word in text.lower() for word in german_words):
-        return "de"
-    
-    # Portuguese indicators
-    portuguese_words = ['olá', 'obrigado', 'por favor', 'sim', 'não', 'está']
-    if any(word in text.lower() for word in portuguese_words):
-        return "pt"
-    
-    # Default to English
-    return DEFAULT_LANGUAGE
+    # Japanese
+    "jp": "ja", "ja": "ja",
 
-def translate_phrase(phrase_key: str, target_language: str = None) -> str:
-    """
-    Translate a common phrase to target language.
-    
-    Args:
-        phrase_key: Key for the phrase (e.g., 'greeting', 'thanks', 'bye')
-        target_language: Target language code (e.g., 'es', 'fr', 'ja')
-    
-    Returns:
-        Translated phrase, or original if translation not available
-    """
-    if not ENABLE_TRANSLATION:
-        return phrase_key
-    
-    if target_language is None:
-        target_language = DEFAULT_LANGUAGE
-    
-    if target_language not in SUPPORTED_LANGUAGES:
-        target_language = DEFAULT_LANGUAGE
-    
-    translations = load_translations()
-    
-    if phrase_key not in translations:
-        return phrase_key
-    
-    phrase_translations = translations[phrase_key]
-    
-    if target_language not in phrase_translations:
-        return phrase_translations.get(DEFAULT_LANGUAGE, phrase_key)
-    
-    return phrase_translations[target_language]
+    # Korean
+    "kr": "ko", "ko": "ko",
 
-def translate_message(text: str, target_language: str = None) -> str:
-    """
-    Translate a full message to target language.
-    Note: This is a placeholder. For real translation, integrate an API like:
-    - Google Translate API
-    - DeepL API
-    - LibreTranslate (free/open source)
-    """
-    if not ENABLE_TRANSLATION:
-        return text
-    
-    if target_language is None:
-        target_language = DEFAULT_LANGUAGE
-    
-    # For now, just return original text
-    # In production, call translation API here
-    print(f"[Translation] Would translate '{text}' to {target_language}")
-    return text
+    # Chinese (treat cn/zh/zh-hans as zh for Argos)
+    "cn": "zh", "zh": "zh", "zh-hans": "zh", "zh_hans": "zh",
 
-def add_language_indicator(text: str, language: str) -> str:
-    """Add a small language flag emoji to responses"""
-    if not ENABLE_TRANSLATION or language == DEFAULT_LANGUAGE:
-        return text
-    
-    flags = {
-        "es": "🇪🇸",
-        "fr": "🇫🇷",
-        "de": "🇩🇪",
-        "ja": "🇯🇵",
-        "ko": "🇰🇷",
-        "pt": "🇵🇹",
-        "ru": "🇷🇺",
-        "zh": "🇨🇳"
-    }
-    
-    flag = flags.get(language, "")
-    if flag:
-        return f"{flag} {text}"
-    return text
+    # Spanish
+    "sp": "es", "es": "es",
 
-def get_multilingual_greeting(username: str, language: str = None) -> str:
-    """Get a greeting in the user's language"""
-    if language is None:
-        language = DEFAULT_LANGUAGE
-    
-    greeting = translate_phrase("greeting", language)
-    return f"{greeting} {username}!"
+    # French, German, Portuguese, Russian, Italian
+    "fr": "fr",
+    "de": "de",
+    "pt": "pt",
+    "ru": "ru",
+    "it": "it",
+}
 
-def get_multilingual_thanks(language: str = None) -> str:
-    """Get a thank you message in the user's language"""
-    if language is None:
-        language = DEFAULT_LANGUAGE
-    
-    return translate_phrase("thanks", language)
+# Emoji flags for a nicer response
+LANG_FLAGS: Dict[str, str] = {
+    "en": "🇺🇸",
+    "es": "🇪🇸",
+    "fr": "🇫🇷",
+    "de": "🇩🇪",
+    "pt": "🇵🇹",
+    "ru": "🇷🇺",
+    "it": "🇮🇹",
+    "ja": "🇯🇵",
+    "ko": "🇰🇷",
+    "zh": "🇨🇳",
+}
 
-def llama_refine_static_translation(raw_text: str, target_lang: str) -> str:
-    """
-    Optionally refine a short static translation (like greetings or UI phrases)
-    using local Llama-3 for natural tone and phrasing.
-    100% free and offline.
-    """
-    try:
-        from MedlarTV.core.llm_brain import generate_response as llama_refine
-        from MedlarTV.core.translation_command import _lang_human_name
+# Lock to serialize first-time installs
+_install_lock = threading.Lock()
 
-        prompt = (
-            f"Make this short system message sound natural and idiomatic in "
-            f"{_lang_human_name(target_lang)}. Keep the same meaning. "
-            f"Do not add explanations or extra text.\n\nMessage:\n{raw_text}"
+
+class TranslationError(Exception):
+    pass
+
+
+def _require_argos():
+    if _import_error:
+        raise TranslationError(
+            "Argos Translate is not available in this environment "
+            f"(import error: {_import_error}). Make sure `argostranslate==1.9.6` is installed."
         )
-        refined = llama_refine(prompt, username="System")
-        if not refined or "Ollama model server offline" in refined:
-            return raw_text
-        return refined.strip().strip('"').strip("“”")
-    except Exception as e:
-        print(f"[Translation] Llama refine error: {e}")
-        return raw_text
+    if argo_pkg is None or argo_tx is None:
+        raise TranslationError("Argos Translate modules not loaded.")
 
-# Example usage and testing
-if __name__ == "__main__":
-    print("=" * 60)
-    print("MedlarTV Translation Module - Testing")
-    print("=" * 60)
-    
-    test_messages = [
-        "Hello, how are you?",
-        "Hola, ¿cómo estás?",
-        "Bonjour, comment allez-vous?",
-        "こんにちは、元気ですか？",
-        "안녕하세요, 어떻게 지내세요?",
-        "Olá, como vai?"
-    ]
-    
-    print("\n--- Language Detection ---")
-    for msg in test_messages:
-        lang = detect_language(msg)
-        print(f"{lang}: {msg}")
-    
-    print("\n--- Phrase Translation ---")
-    for lang in SUPPORTED_LANGUAGES:
-        greeting = translate_phrase("greeting", lang)
-        thanks = translate_phrase("thanks", lang)
-        print(f"{lang}: {greeting} / {thanks}")
-    
-    print("\n--- Multilingual Greetings ---")
-    for lang in SUPPORTED_LANGUAGES:
-        greeting = get_multilingual_greeting("User123", lang)
-        print(f"{lang}: {greeting}")
+
+def normalize_lang(code_or_alias: str) -> Optional[str]:
+    if not code_or_alias:
+        return None
+    c = code_or_alias.strip().lower()
+    return LANG_ALIASES.get(c, c)  # allow direct ISO if already correct
+
+
+def _list_installed_pairs() -> Set[Tuple[str, str]]:
+    """Return a set of (from, to) codes that are currently installed."""
+    pairs = set()
+    for from_lang in argo_tx.get_installed_languages():
+        for to_lang in from_lang.translations_to:
+            pairs.add((from_lang.code, to_lang.code))
+    return pairs
+
+
+def _get_language_obj(code: str):
+    """Return Argos Language object for code, or None."""
+    for lang in argo_tx.get_installed_languages():
+        if lang.code == code:
+            return lang
+    return None
+
+
+def _ensure_pair_installed(src: str, tgt: str) -> None:
+    """Install translation package for (src -> tgt) if missing."""
+    installed = _list_installed_pairs()
+    if (src, tgt) in installed:
+        return
+
+    with _install_lock:
+        # Double-check inside lock
+        installed = _list_installed_pairs()
+        if (src, tgt) in installed:
+            return
+
+        # Find package
+        packages = argo_pkg.get_available_packages()
+        match = next((p for p in packages if p.from_code == src and p.to_code == tgt), None)
+        if not match:
+            raise TranslationError(f"No Argos translation package found for {src} → {tgt}.")
+
+        # Download+Install
+        try:
+            path = match.download()
+            argo_pkg.install_from_path(path)
+        except Exception as e:
+            raise TranslationError(f"Failed to install {src}→{tgt} package: {e}")
+
+
+def _detect(text: str, default: str = "en") -> str:
+    if not _detect_lang:
+        return default
+    try:
+        code = _detect_lang(text)
+        # Map langdetect outputs through our aliases if needed
+        return normalize_lang(code) or default
+    except Exception:
+        return default
+
+
+def translate_text(
+    text: str,
+    target: str,
+    source: Optional[str] = None,
+    autodetect_source: bool = True
+) -> Tuple[str, str, str]:
+    """
+    Translate text with Argos.
+    Returns: (translated_text, src_code, tgt_code)
+    Raises: TranslationError
+    """
+    _require_argos()
+
+    if not text or not text.strip():
+        raise TranslationError("Nothing to translate.")
+
+    tgt = normalize_lang(target)
+    if not tgt:
+        raise TranslationError(f"Unknown target language: {target}")
+
+    src = normalize_lang(source) if source else None
+    if not src and autodetect_source:
+        src = _detect(text, default="en")
+    if not src:
+        src = "en"
+
+    # Ensure we have a package; download on first use if missing
+    _ensure_pair_installed(src, tgt)
+
+    # Resolve language objects
+    from_lang = _get_language_obj(src)
+    to_lang = _get_language_obj(tgt)
+    if not from_lang or not to_lang:
+        raise TranslationError("Language models not available after install attempt.")
+
+    try:
+        translator = from_lang.get_translation(to_lang)
+        out = translator.translate(text)
+        return out, src, tgt
+    except Exception as e:
+        raise TranslationError(f"Translation failed: {e}")
+
+
+def supported_aliases_message() -> str:
+    return (
+        "Supported: jp/ja (🇯🇵), kr/ko (🇰🇷), cn/zh (🇨🇳), "
+        "sp/es (🇪🇸), fr (🇫🇷), de (🇩🇪), pt (🇵🇹), ru (🇷🇺), it (🇮🇹)"
+    )
+
+
+def flag_for(code: str) -> str:
+    return LANG_FLAGS.get(code, "")
