@@ -40,11 +40,8 @@ from .fuzzy_trigger import (
 # Translation Module
 from .translation import (
     detect_language,
-    translate_phrase,
-    translate_message,
     get_multilingual_greeting,
-    get_multilingual_thanks,
-    add_language_indicator
+    add_language_indicator,
 )
 
 # Response Templates Module
@@ -169,14 +166,6 @@ __all__ = [
     'fuzzy_should_respond',
     'find_triggers_in_message',
     'is_trigger_word',
-    
-    # Translation
-    'detect_language',
-    'translate_phrase',
-    'translate_message',
-    'get_multilingual_greeting',
-    'get_multilingual_thanks',
-    'add_language_indicator',
     
     # Response Templates
     'get_template',

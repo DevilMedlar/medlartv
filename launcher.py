@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-MedlarTV Unified Launcher
-Cross-platform launcher that works on Windows, Linux, and macOS
+MedlarTV Unified Launcher (Mixed venv + system processes)
+Runs Ollama and LibreTranslate from system, Medlar from .venv
 """
 
 import os
@@ -10,193 +10,130 @@ import time
 import platform
 import subprocess
 import signal
-import socket
 from pathlib import Path
-from typing import List, Optional
 
+# ──────────────────────────────────────────────────────────────
+# Colors for pretty output
 class Colors:
     RED = '\033[0;31m'
     GREEN = '\033[0;32m'
     YELLOW = '\033[1;33m'
     CYAN = '\033[0;36m'
     NC = '\033[0m'
-    
+
     @classmethod
-    def disable_on_windows(cls):
+    def init(cls):
         if platform.system() == 'Windows':
             try:
                 import colorama
-                colorama.init()
+                colorama.just_fix_windows_console()
             except ImportError:
                 cls.RED = cls.GREEN = cls.YELLOW = cls.CYAN = cls.NC = ''
+Colors.init()
+# ──────────────────────────────────────────────────────────────
 
-Colors.disable_on_windows()
+ROOT = Path(__file__).parent.resolve()
+VENV_PYTHON = ROOT / ".venv" / "Scripts" / "python.exe"
+LOGS_DIR = ROOT / "logs"
+LOGS_DIR.mkdir(exist_ok=True)
 
+processes = []
 
-class MedlarTVLauncher:
-    def __init__(self):
-        self.processes: List[subprocess.Popen] = []
-        self.root_dir = Path(__file__).parent
-        self.python_cmd = self._get_python_command()
+def banner():
+    print(f"""{Colors.CYAN}
+╔══════════════════════════════════════════════════════════╗
+║                    MEDLAR  TACTICAL  AI                 ║
+╚══════════════════════════════════════════════════════════╝
+{Colors.NC}""")
 
-    def _get_python_command(self) -> str:
-        return "python" if platform.system() == "Windows" else "python3"
+def start_process(name, command, wait=2, cwd=None, use_venv=False):
+    print(f"{Colors.CYAN}[START] {name}...{Colors.NC}")
+    try:
+        env = os.environ.copy()
+        if use_venv:
+            env["PYTHONPATH"] = str(ROOT)
+        proc = subprocess.Popen(
+            command,
+            cwd=cwd or ROOT,
+            env=env,
+            shell=True,
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if platform.system() == "Windows" else 0
+        )
+        time.sleep(wait)
+        if proc.poll() is None:
+            print(f"{Colors.GREEN}[OK] {name} running (PID {proc.pid}){Colors.NC}")
+            processes.append(proc)
+        else:
+            print(f"{Colors.RED}[FAIL] {name} failed to start{Colors.NC}")
+    except Exception as e:
+        print(f"{Colors.RED}[ERROR] {name}: {e}{Colors.NC}")
 
-    def _print_banner(self):
-        banner = f"""{Colors.CYAN}
-╔═══════════════════════════════════════════════════════════╗
-║                                                           ║
-║   ███╗   ███╗███████╗██████╗ ██╗      █████╗ ██████╗    ║
-║   ████╗ ████║██╔════╝██╔══██╗██║     ██╔══██╗██╔══██╗   ║
-║   ██╔████╔██║█████╗  ██║  ██║██║     ███████║██████╔╝   ║
-║   ██║╚██╔╝██║██╔══╝  ██║  ██║██║     ██╔══██║██╔══██╗   ║
-║   ██║ ╚═╝ ██║███████╗██████╔╝███████╗██║  ██║██║  ██║   ║
-║   ╚═╝     ╚═╝╚══════╝╚═════╝ ╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝   ║
-║                                                           ║
-║              T A C T I C A L   A I   S Y S T E M         ║
-║                                                           ║
-╚═══════════════════════════════════════════════════════════╝
-{Colors.NC}"""
-        print(banner)
-
-    def _check_env_file(self) -> bool:
-        env_path = self.root_dir / ".env"
-        if not env_path.exists():
-            print(f"{Colors.RED}[ERROR] .env file not found!{Colors.NC}")
-            return False
-        return True
-
-    def _create_logs_dir(self):
-        logs_dir = self.root_dir / "logs"
-        logs_dir.mkdir(exist_ok=True)
-
-    def _is_port_in_use(self, port: int) -> bool:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            return s.connect_ex(('127.0.0.1', port)) == 0
-
-    def _start_component(self, name: str, command: str, wait_time: int = 2, port: Optional[int] = None) -> Optional[subprocess.Popen]:
-        print(f"{Colors.CYAN}[START] {name}...{Colors.NC}")
-
-        if port and self._is_port_in_use(port):
-            print(f"{Colors.YELLOW}[INFO] {name} already running on port {port}{Colors.NC}")
-            return None
-
+def stop_all():
+    print(f"\n{Colors.YELLOW}Shutting down Medlar systems...{Colors.NC}")
+    for p in processes:
         try:
-            env = os.environ.copy()
-            env["PYTHONPATH"] = str(self.root_dir)
-            process = subprocess.Popen(command, shell=True, env=env, cwd=str(self.root_dir))
-            time.sleep(wait_time)
-
-            if process.poll() is None:
-                print(f"{Colors.GREEN}[OK] {name} running (PID: {process.pid}){Colors.NC}")
-                return process
+            if platform.system() == "Windows":
+                p.send_signal(signal.CTRL_BREAK_EVENT)
             else:
-                print(f"{Colors.RED}[FAIL] {name} failed to start{Colors.NC}")
-                return None
+                p.terminate()
         except Exception as e:
-            print(f"{Colors.RED}[ERROR] Failed to start {name}: {e}{Colors.NC}")
-            return None
-
-    def _stop_all(self):
-        print(f"\n{Colors.YELLOW}Shutting down MedlarTV...{Colors.NC}")
-        for process in self.processes:
-            try:
-                if platform.system() == "Windows":
-                    process.terminate()
-                else:
-                    process.send_signal(signal.SIGTERM)
-            except Exception as e:
-                print(f"{Colors.YELLOW}Warning: {e}{Colors.NC}")
-
-        for process in self.processes:
-            try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                process.kill()
-        print(f"{Colors.GREEN}All systems offline. Standing by.{Colors.NC}\n")
-
-    def start(self):
-        self._print_banner()
-        print(f"{Colors.GREEN}Initializing MedlarTV systems...{Colors.NC}\n")
-
-        if not self._check_env_file():
-            sys.exit(1)
-        self._create_logs_dir()
-
-        libretranslate_path = Path("C:/LibreTranslate/venv/Scripts/python.exe")
-        if not libretranslate_path.exists():
-            print(f"{Colors.RED}[ERROR] LibreTranslate venv not found at {libretranslate_path}{Colors.NC}")
-            sys.exit(1)
-
-        components = [
-            {
-                "name": "LibreTranslate (Local Translation API)",
-                "command": f'"{libretranslate_path}" -m libretranslate.main',
-                "wait": 5,
-                "port": 5000
-            },
-            {
-                "name": "Ollama Server",
-                "command": "ollama serve",
-                "wait": 3,
-                "port": 11434
-            },
-            {
-                "name": "Core API (FastAPI)",
-                "command": f"{self.python_cmd} MedlarTV/core/main.py",
-                "wait": 4
-            },
-            {
-                "name": "Twitch Listener",
-                "command": f"{self.python_cmd} MedlarTV/tools/twitch_listener.py",
-                "wait": 2
-            }
-        ]
-
-        for comp in components:
-            proc = self._start_component(comp["name"], comp["command"], comp["wait"], comp.get("port"))
-            if proc:
-                self.processes.append(proc)
-            elif comp.get("port") and self._is_port_in_use(comp["port"]):
-                print(f"{Colors.YELLOW}[SKIP] {comp['name']} already active.{Colors.NC}")
-            else:
-                print(f"{Colors.RED}[ABORT] Failed to start {comp['name']}{Colors.NC}")
-                self._stop_all()
-                sys.exit(1)
-
-        print(f"\n{Colors.CYAN}{'='*60}{Colors.NC}")
-        print(f"{Colors.GREEN}MedlarTV Systems Operational{Colors.NC}")
-        print(f"{Colors.CYAN}{'='*60}{Colors.NC}\n")
-
-        print(f"{Colors.YELLOW}Active Components:{Colors.NC}")
-        for proc in self.processes:
-            status = "🟢 RUNNING" if proc.poll() is None else "🔴 STOPPED"
-            print(f"  {status} PID: {proc.pid}")
-
-        print(f"\n{Colors.CYAN}Commands:{Colors.NC}")
-        print(f"  {Colors.GREEN}Ctrl+C{Colors.NC} - Shutdown all systems")
-        print(f"\n{Colors.YELLOW}Press Ctrl+C to shutdown...{Colors.NC}\n")
-
+            print(f"{Colors.YELLOW}Warning stopping process: {e}{Colors.NC}")
+    for p in processes:
         try:
-            while True:
-                time.sleep(1)
-                for proc in self.processes:
-                    if proc.poll() is not None:
-                        print(f"{Colors.RED}[ALERT] A component stopped unexpectedly!{Colors.NC}")
-                        self._stop_all()
-                        sys.exit(1)
-        except KeyboardInterrupt:
-            self._stop_all()
-
+            p.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            p.kill()
+    print(f"{Colors.GREEN}All systems offline.{Colors.NC}")
 
 def main():
-    launcher = MedlarTVLauncher()
-    launcher.start()
+    banner()
+    print(f"{Colors.GREEN}Initializing Medlar Tactical AI systems...{Colors.NC}\n")
+
+    # Check .venv exists
+    if not VENV_PYTHON.exists():
+        print(f"{Colors.RED}[ERROR] Python venv not found at {VENV_PYTHON}{Colors.NC}")
+        sys.exit(1)
+
+    # ───────────────────────────────────────────────
+    # 1️⃣ Ollama (system)
+    start_process("Ollama Server", "ollama serve", wait=3)
+
+    # ───────────────────────────────────────────────
+    # 2️⃣ LibreTranslate (system)
+    lt_script = Path("C:/LibreTranslate")
+    if lt_script.exists():
+        start_process(
+            "LibreTranslate Server",
+            "python -m libretranslate.main",
+            cwd=lt_script,
+            wait=5
+        )
+    else:
+        print(f"{Colors.YELLOW}[WARN] LibreTranslate path not found at {lt_script}{Colors.NC}")
+
+    # ───────────────────────────────────────────────
+    # 3️⃣ Medlar Core (inside venv)
+    start_process("Medlar Core (FastAPI)", f'"{VENV_PYTHON}" MedlarTV/core/main.py', use_venv=True, wait=4)
+
+    # ───────────────────────────────────────────────
+    # 4️⃣ Twitch Listener (inside venv)
+    start_process("Twitch Listener", f'"{VENV_PYTHON}" MedlarTV/tools/twitch_listener.py', use_venv=True, wait=2)
+
+    print(f"\n{Colors.GREEN}✅ MedlarTV Systems Operational{Colors.NC}")
+    print(f"{Colors.YELLOW}Press Ctrl+C to shutdown gracefully...{Colors.NC}\n")
+
+    try:
+        while True:
+            time.sleep(1)
+            for p in processes:
+                if p.poll() is not None:
+                    print(f"{Colors.RED}[ALERT] {p.args} exited unexpectedly!{Colors.NC}")
+                    stop_all()
+                    sys.exit(1)
+    except KeyboardInterrupt:
+        stop_all()
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except Exception as e:
-        print(f"\n{Colors.RED}[FATAL] Unexpected error: {e}{Colors.NC}\n")
-        sys.exit(1)
+    main()
+

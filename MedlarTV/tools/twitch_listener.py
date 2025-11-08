@@ -7,7 +7,7 @@ import logging
 from dotenv import load_dotenv
 from pathlib import Path
 
-from MedlarTV.core.translation_command import handle_translate_command, get_supported_languages_list
+from MedlarTV.core.translation_command import handle_t_command as handle_translate_command, handle_tlang_command as get_supported_languages_list
 from MedlarTV.core.memory import record_mood, get_dominant_weighted_mood
 from MedlarTV.core.mood_system import blended_phrase
 from MedlarTV.core.mood_system import record_session_mood
@@ -405,41 +405,62 @@ def send_reply(sock, message, reply_to_msg_id=None):
 
 
 def handle_command(sock, username, message, msg_id=None, badges=None):
-    """Handle ! commands from chat with flexible role-based permissions."""
+    """
+    Handle ! commands from chat with flexible role-based permissions.
+    NOTE: Fixed the translation path to pass the actual '<lang> <text>' tail.
+    """
     parts = message.split()
     cmd = parts[0][1:].lower()
     args = " ".join(parts[1:]) if len(parts) > 1 else ""
-    
+
     if cmd not in COMMANDS:
+        # Still allow our custom '!tlang' even if not in commands.yaml
+        if cmd == "tlang":
+            send_reply(sock, get_supported_languages_list(), msg_id)
+            return True
         return False
-    
+
     cmd_config = COMMANDS[cmd]
-    
-    # Check flexible role-based permissions
+
     has_permission, denial_reason = check_command_permission(username, cmd_config, badges)
-    
     if not has_permission:
         send_reply(sock, f"@{username} ❌ {denial_reason}", msg_id)
         log.info(f"[Command] {username} denied access to !{cmd}: {denial_reason}")
         return True
-    
+
+    # --- SPECIAL: Translation commands (fixed) ---
+    if cmd in ["t", "translate", "trans"]:
+        # IMPORTANT: pass the *tail after the command* exactly as typed
+        raw_after_cmd = args  # everything after '!t'
+        if not raw_after_cmd:
+            send_reply(sock, "!t <lang> <text> | Example: !t jp Hello!  use !tlang to see supported languages", msg_id)
+            return True
+
+        response = handle_translate_command(raw_after_cmd, username)
+        send_reply(sock, response, msg_id)
+        log_command(username, f"!{cmd}", success=True)
+        return True
+
+    # --- built-in helper: '!tlang' if present in commands.yaml ---
+    if cmd == "tlang":
+        send_reply(sock, get_supported_languages_list(), msg_id)
+        log_command(username, "!tlang", success=True)
+        return True
+
+    # --- existing generic responses / other specials ---
     response = cmd_config.get("response", "")
-    
-    # Format the response with user role
     formatted_user = format_username(username)
-    response = response.replace("{user}", formatted_user)
-    response = response.replace("{nick}", NICK)
-    
-    # Special command handling
+    response = response.replace("{user}", formatted_user).replace("{nick}", NICK)
+
     if cmd == "moodnumbers":
         from MedlarTV.core.memory import load_memory
         data = load_memory()
         moods = data["personality_memory"]["mood_weights"]
         response = f"{formatted_user} 📊 Mood Stats: " + " | ".join([f"{m}: {v}" for m, v in moods.items()])
-    
+
     elif cmd == "mood":
         response = f"{formatted_user} Current mood: {current_mood} {MOODS.get(current_mood, {}).get('emoji', [''])[0]}"
-    
+
     elif cmd == "addcopilot":
         if len(parts) < 2:
             response = f"{formatted_user} Usage: !addcopilot username"
@@ -449,7 +470,7 @@ def handle_command(sock, username, message, msg_id=None, badges=None):
                 response = response.replace("{target}", target)
             else:
                 response = f"{formatted_user} {target} is already a Co-Pilot!"
-    
+
     elif cmd == "removecopilot":
         if len(parts) < 2:
             response = f"{formatted_user} Usage: !removecopilot username"
@@ -459,47 +480,16 @@ def handle_command(sock, username, message, msg_id=None, badges=None):
                 response = response.replace("{target}", target)
             else:
                 response = f"{formatted_user} {target} is not a Co-Pilot!"
-    
+
     elif cmd == "listcopilots":
         if CO_PILOTS:
             copilot_list = ", ".join(sorted(CO_PILOTS))
             response = response.replace("{copilots}", copilot_list)
         else:
             response = f"{formatted_user} No active Co-Pilots."
-     
-     # Translation Command
-    elif cmd in ["t", "translate", "trans"]:
-        response = handle_translate_command(args, username)
-        send_reply(SOCKET, response, msg_id)
 
-        # 🧠 Enhanced logging: note if Llama-3 refinement was used
-        refined_tag = "llama3_refined" if "✨" in response else "raw"
-        log_command(username, f"{cmd}({refined_tag})", success=True)
-        return
-
-    # NEW: Translation Help
-    elif cmd in ["tlang", "translatelangs", "languages"]:
-        langs = get_supported_languages_list()
-        response = f"@{username} Supported languages: {langs}"
-        send_reply(SOCKET, response, msg_id)
-        return
-    
     send_reply(sock, response, msg_id)
     return True
-
-
-def detect_mood_from_message(message):
-    """Detect if message should trigger a mood change."""
-    msg_lower = message.lower()
-    
-    for mood_name, mood_config in MOODS.items():
-        triggers = mood_config.get("triggers", [])
-        for trigger in triggers:
-            if trigger in msg_lower:
-                return mood_name
-    
-    return None
-
 
 def should_respond_to_message(username, message):
     """Determine if MedlarTV should respond to this message."""
@@ -519,6 +509,18 @@ def should_respond_to_message(username, message):
     
     return False
 
+def detect_mood_from_message(message: str):
+    """Detect if message content should trigger a mood change automatically."""
+    msg_lower = message.lower()
+    if any(word in msg_lower for word in ["hype", "let's go", "pog", "fire", "woo"]):
+        return "hype"
+    if any(word in msg_lower for word in ["chill", "relax", "vibe", "calm", "cozy"]):
+        return "chill"
+    if any(word in msg_lower for word in ["lol", "lmao", "rofl", "bruh", "funny"]):
+        return "snarky"
+    if any(word in msg_lower for word in ["sad", "help", "aww", "sorry", "ouch"]):
+        return "supportive"
+    return None
 
 def get_llm_response(username, message):
     """Get AI response from the Core API."""
@@ -554,7 +556,6 @@ def get_llm_response(username, message):
         log.error(f"[Core] Error getting LLM response: {e}")
         return None
 
-
 def format_reply_with_mood(reply):
     """Add mood-based styling to reply."""
     style = STYLE_PROFILES.get(current_mood, {})
@@ -568,7 +569,6 @@ def format_reply_with_mood(reply):
         reply = f"{reply} {suffix}"
     
     return reply
-
 
 # --- NETWORK FUNCTIONS ---
 def connect():
@@ -615,7 +615,6 @@ def connect():
             time.sleep(1)
 
     return sock
-
 
 def listen(sock):
     log.info("Listening for Twitch chat messages...")
