@@ -52,19 +52,40 @@ def start_process(name, command, wait=2, cwd=None, use_venv=False):
         env = os.environ.copy()
         if use_venv:
             env["PYTHONPATH"] = str(ROOT)
+        env["PYTHONIOENCODING"] = "utf-8"
+
+        # DEBUG LINES (correctly indented)
+        print(f"[DEBUG] Launching process '{name}' with command: {command}")
+        print(f"[DEBUG] Working directory: {cwd or ROOT}")
+        print(f"[DEBUG] Using venv: {use_venv}")
+
+        log_file_name = name.lower().replace(" ", "_").replace("(", "").replace(")", "") + ".log"
+        log_path = LOGS_DIR / log_file_name
+        log_handle = open(log_path, "a", encoding="utf-8")
+
         proc = subprocess.Popen(
             command,
             cwd=cwd or ROOT,
             env=env,
             shell=True,
+            stdout=log_handle,
+            stderr=subprocess.STDOUT,
             creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if platform.system() == "Windows" else 0
         )
+
+        print(f"[DEBUG] Process object created. PID pending...")
+
         time.sleep(wait)
         if proc.poll() is None:
             print(f"{Colors.GREEN}[OK] {name} running (PID {proc.pid}){Colors.NC}")
-            processes.append(proc)
+            processes.append({"proc": proc, "name": name, "log": log_handle})
         else:
             print(f"{Colors.RED}[FAIL] {name} failed to start{Colors.NC}")
+            try:
+                log_handle.close()
+            except Exception:
+                pass
+
     except Exception as e:
         print(f"{Colors.RED}[ERROR] {name}: {e}{Colors.NC}")
 
@@ -73,16 +94,20 @@ def stop_all():
     for p in processes:
         try:
             if platform.system() == "Windows":
-                p.send_signal(signal.CTRL_BREAK_EVENT)
+                p["proc"].send_signal(signal.CTRL_BREAK_EVENT)
             else:
-                p.terminate()
+                p["proc"].terminate()
         except Exception as e:
             print(f"{Colors.YELLOW}Warning stopping process: {e}{Colors.NC}")
     for p in processes:
         try:
-            p.wait(timeout=5)
+            p["proc"].wait(timeout=5)
         except subprocess.TimeoutExpired:
-            p.kill()
+            p["proc"].kill()
+        try:
+            p["log"].close()
+        except Exception:
+            pass
     print(f"{Colors.GREEN}All systems offline.{Colors.NC}")
 
 def main():
@@ -117,17 +142,23 @@ def main():
 
     # ───────────────────────────────────────────────
     # 4️⃣ Twitch Listener (inside venv)
-    start_process("Twitch Listener", f'"{VENV_PYTHON}" MedlarTV/tools/twitch_listener.py', use_venv=True, wait=2)
+    #start_process("Twitch Listener", f'"{VENV_PYTHON}" MedlarTV/tools/twitch_listener.py', use_venv=True, wait=2)
 
     print(f"\n{Colors.GREEN}✅ MedlarTV Systems Operational{Colors.NC}")
     print(f"{Colors.YELLOW}Press Ctrl+C to shutdown gracefully...{Colors.NC}\n")
 
     try:
+        heartbeat = 0
         while True:
             time.sleep(1)
+            heartbeat += 1
+            if heartbeat % 10 == 0:
+                print("[DEBUG] Launcher heartbeat: processes running okay...")
             for p in processes:
-                if p.poll() is not None:
-                    print(f"{Colors.RED}[ALERT] {p.args} exited unexpectedly!{Colors.NC}")
+                if p["proc"].poll() is not None:
+                    print(f"{Colors.RED}[ALERT] Process crashed: {p['proc'].args}{Colors.NC}")
+                    print(f"[DEBUG] Return code: {p['proc'].returncode}")
+                    print(f"{Colors.RED}[ALERT] {p['proc'].args} exited unexpectedly!{Colors.NC}")
                     stop_all()
                     sys.exit(1)
     except KeyboardInterrupt:

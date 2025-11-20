@@ -21,12 +21,17 @@ commands:
     allowed_roles: ["everybody"]
   
   help:
-    response: "Available commands: !ping, !status, !hello, !hype, !medlar, !mood, !emotion, !emotions,!feelstate, !t, !tlang, !thelp, !listcopilots, !streaminfo, !title, !game, !help"
+    response: "📋 Available commands: !ping, !status, !hello, !hype, !medlar, !mood, !emotion, !emotions, !feelstate, !t, !tlang, !thelp, !listcopilots, !streaminfo, !help, !commands"
     allowed_roles: ["everybody"]
 
   modhelp:
-    response: "Available commands: !moodnumbers, !resetemotions, !addcopilot, !removecopilot, !timeout, !ban, !warn, !unwarn, !whitelist, !modstats, !modhelp"
+    response: "🛡️ Mod commands: !moodnumbers, !resetemotions, !addcopilot, !removecopilot, !timeout, !ban, !warn, !unwarn, !whitelist, !modstats, !modhelp, !title, !game"
     allowed_roles: ["pilot", "mod"]
+
+  commands:
+    response: "📋 Available commands: !ping, !status, !hello, !hype, !medlar, !mood, !emotion, !emotions, !feelstate, !t, !tlang, !thelp, !listcopilots, !streaminfo, !title, !game, !help, !commands"
+    allowed_roles: ["everybody"]
+    description: "Show all available commands"
 
   # MOOD & EMOTION COMMANDS
   mood:
@@ -109,7 +114,7 @@ commands:
     allowed_roles: ["everybody"]
     description: "List all active co-pilots"
   
-  # STREAM MANAGEMENT
+  # STREAM MANAGEMENT (Now handled by command_handlers.py)
   streaminfo:
     response: "Getting stream info..."
     allowed_roles: ["everybody"]
@@ -117,12 +122,12 @@ commands:
   
   title:
     response: "Current stream title"
-    allowed_roles: ["everybody"]
+    allowed_roles: ["pilot", "mod"]
     description: "Get or set stream title"
   
   game:
     response: "Current game/category"
-    allowed_roles: ["everybody"]
+    allowed_roles: ["pilot", "mod"]
     description: "Get or set stream category"
   
   # MODERATION COMMANDS
@@ -173,4 +178,36 @@ commands:
 # allowed_roles: ["everybody"]                      - Everyone can use
 #
 # Note: "pilot" always has access to everything regardless of allowed_roles
+# ============================================================================
+
+# ============================================================================
+# NOTES ON UNIFIED COMMAND SYSTEM
+# ============================================================================
+#
+# Commands handled by command_handlers.py (new system):
+# - !ping (shows actual latency)
+# - !status (checks all systems)
+# - !emotion (shows dominant emotion)
+# - !emotions (shows top 3 with percentages)
+# - !feelstate (shows detailed description)
+# - !resetemotions (actually resets emotions)
+# - !streaminfo (shows live stream data)
+# - !title (view/set stream title)
+# - !game (view/set stream category)
+# - !help (dynamically generated list)
+# - !modhelp (dynamically generated mod list)
+#
+# These commands will be intercepted by the unified handler first.
+# If you want to override their behavior, remove them from COMMAND_REGISTRY
+# in command_handlers.py and they'll fall back to these YAML definitions.
+#
+# Commands still handled by YAML + twitch_listener.py:
+# - !hello, !hype, !medlar (simple responses)
+# - !mood, !moodnumbers (mood system)
+# - !t, !tlang, !thelp (translation)
+# - !addcopilot, !removecopilot, !listcopilots (co-pilot management)
+# - !timeout, !ban, !warn, !unwarn, !whitelist, !modstats (moderation)
+#
+# To add new simple commands, just add them here.
+# To add complex commands, add them to command_handlers.py
 # ============================================================================

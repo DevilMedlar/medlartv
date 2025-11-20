@@ -1,314 +1,699 @@
 """
-MedlarTV Advanced Emotional System
-Dynamic, human-like emotional state with complex mood interactions
+MedlarTV Emotional System (Full Rework, Session-Scoped Only)
+------------------------------------------------------------
+
+- Emotions are numeric weights in [0.0, 1.0]
+- Baselines & optional decay are loaded from config/emotions.yaml (if present)
+- State lives ONLY in memory – no persistence between runs
+- Each message:
+    * decays emotions toward baseline
+    * uses advanced sentiment analysis for multi-emotion scores
+    * estimates severity level from sentiment strength
+    * applies personality multipliers (from personality.yaml if defined)
+    * ripples via an influence graph to keep emotions interconnected
+- Public API is stable and backwards-compatible:
+
+    get_emotional_system()
+    process_chat_emotion(message: str, username: str | None = None)
+    get_current_emotion() -> str | None
+    get_emotion_state() -> dict[str, float]
+    boost_emotion(name: str, amount: float = 0.1)
+    reset_emotions()
+
+Any other module should continue to work with these functions.
 """
 
-import yaml
-import os
+from __future__ import annotations
+
+import logging
 import time
-import math
-from datetime import datetime
-from typing import Dict, Tuple, Optional
 from pathlib import Path
+from typing import Dict, Any, Optional, Tuple
 
-# Emotional System Configuration
-HERE = os.path.dirname(os.path.abspath(__file__))
-EMOTION_PATH = os.path.normpath(os.path.join(HERE, "..", "data", "emotions.yaml"))
+import yaml  # type: ignore
 
-# --- Expanded Emotion Set ---
-# Each emotion has a baseline and current value (0.0 to 1.0)
-EMOTIONS = {
-    # Core Emotions
-    "happiness": {"baseline": 0.5, "decay_rate": 0.95, "keywords": ["happy", "joy", "great", "awesome", "love", "yay", "fun"]},
-    "sadness": {"baseline": 0.2, "decay_rate": 0.98, "keywords": ["sad", "cry", "miss", "hurt", "pain", "depressed"]},
-    "anger": {"baseline": 0.1, "decay_rate": 0.90, "keywords": ["angry", "mad", "hate", "annoyed", "pissed", "furious"]},
-    "fear": {"baseline": 0.1, "decay_rate": 0.95, "keywords": ["scared", "afraid", "worried", "anxious", "nervous"]},
-    
-    # Social Emotions
-    "excitement": {"baseline": 0.4, "decay_rate": 0.92, "keywords": ["hype", "excited", "omg", "wow", "amazing", "pogchamp"]},
-    "gratitude": {"baseline": 0.3, "decay_rate": 0.97, "keywords": ["thanks", "thank you", "grateful", "appreciate"]},
-    "jealousy": {"baseline": 0.1, "decay_rate": 0.96, "keywords": ["jealous", "envy", "wish i had", "lucky"]},
-    "pride": {"baseline": 0.3, "decay_rate": 0.96, "keywords": ["proud", "achievement", "accomplished", "nailed it"]},
-    
-    # Mood States
-    "chill": {"baseline": 0.5, "decay_rate": 0.99, "keywords": ["chill", "relax", "calm", "vibing", "zen"]},
-    "supportive": {"baseline": 0.6, "decay_rate": 0.98, "keywords": ["support", "help", "encourage", "you got this"]},
-    "snarky": {"baseline": 0.3, "decay_rate": 0.94, "keywords": ["lol", "bruh", "sure", "whatever", "ok buddy"]},
-    
-    # Energy States
-    "energetic": {"baseline": 0.4, "decay_rate": 0.93, "keywords": ["let's go", "energy", "pumped", "ready"]},
-    "tired": {"baseline": 0.2, "decay_rate": 0.96, "keywords": ["tired", "exhausted", "sleepy", "drained"]},
-    "stressed": {"baseline": 0.2, "decay_rate": 0.94, "keywords": ["stress", "overwhelmed", "too much", "ugh"]},
-    
-    # Connection States
-    "lonely": {"baseline": 0.1, "decay_rate": 0.97, "keywords": ["lonely", "alone", "miss you", "where is everyone"]},
-    "connected": {"baseline": 0.5, "decay_rate": 0.98, "keywords": ["together", "community", "squad", "fam"]},
+log = logging.getLogger("emotions")
+log.setLevel(logging.DEBUG)
+
+print("[DEBUG emotions] emotional_system.py loaded")
+
+# ---------------------------------------------------------------------------
+# Paths & Config Helpers
+# ---------------------------------------------------------------------------
+
+def _find_config_path(filename: str) -> Optional[Path]:
+    """
+    Try to resolve a config file in common locations.
+
+    Priority:
+      1. MedlarTV/config/<filename>
+      2. MedlarTV/data/<filename>
+    """
+    here = Path(__file__).resolve()
+    candidates = [
+        here.parent.parent / "config" / filename,
+        here.parent.parent / "data" / filename,
+    ]
+    for path in candidates:
+        if path.exists():
+            return path
+    return None
+
+
+EMOTIONS_CONFIG_PATH = _find_config_path("emotions.yaml")
+PERSONALITY_CONFIG_PATH = _find_config_path("personality.yaml")
+
+# Expression level for how strongly the bot should show emotions in text.
+EXPRESSION_LEVEL: int = 10  # 0–10, we run on maximum expressiveness by design
+
+
+# ---------------------------------------------------------------------------
+# Default Emotion Configuration
+# ---------------------------------------------------------------------------
+
+# These are built-in defaults in case emotions.yaml is missing or incomplete.
+# If emotions.yaml defines an emotion, its baseline/decay will override these.
+DEFAULT_EMOTIONS: Dict[str, Dict[str, Any]] = {
+    "happiness":   {"baseline": 0.4, "decay": 0.92},
+    "excitement":  {"baseline": 0.3, "decay": 0.95},
+    "supportive":  {"baseline": 0.6, "decay": 0.96},
+    "chill":       {"baseline": 0.7, "decay": 0.99},
+    "sadness":     {"baseline": 0.1, "decay": 0.95},
+    "anger":       {"baseline": 0.05, "decay": 0.95},
+    "fear":        {"baseline": 0.05, "decay": 0.98},
+    "snarky":      {"baseline": 0.2, "decay": 0.96},
+    "energetic":   {"baseline": 0.3, "decay": 0.94},
+    "tired":       {"baseline": 0.2, "decay": 0.96},
+    "stressed":    {"baseline": 0.1, "decay": 0.95},
+    "lonely":      {"baseline": 0.1, "decay": 0.98},
+    "connected":   {"baseline": 0.5, "decay": 0.97},
+    "pride":       {"baseline": 0.2, "decay": 0.95},
+    "jealousy":    {"baseline": 0.05, "decay": 0.96},
 }
 
-# --- Emotional Relationships ---
-# When one emotion increases, others are affected
-EMOTION_INFLUENCES = {
-    "happiness": {"sadness": -0.3, "anger": -0.2, "fear": -0.1, "excitement": 0.2, "connected": 0.1},
-    "sadness": {"happiness": -0.3, "excitement": -0.2, "energetic": -0.1, "lonely": 0.2},
-    "anger": {"happiness": -0.2, "chill": -0.3, "snarky": 0.1, "stressed": 0.2},
-    "fear": {"chill": -0.2, "stressed": 0.2, "energetic": -0.1},
-    "excitement": {"happiness": 0.2, "energetic": 0.3, "tired": -0.2, "chill": -0.1},
-    "jealousy": {"happiness": -0.1, "anger": 0.1, "sadness": 0.1},
-    "gratitude": {"happiness": 0.2, "connected": 0.2, "supportive": 0.1},
-    "chill": {"stressed": -0.3, "anger": -0.2, "tired": 0.1},
-    "supportive": {"happiness": 0.1, "connected": 0.2, "pride": 0.1},
-    "stressed": {"chill": -0.2, "tired": 0.1, "anger": 0.1},
-    "lonely": {"connected": -0.3, "sadness": 0.2},
-    "connected": {"lonely": -0.3, "happiness": 0.1, "supportive": 0.1},
+# Fallback decay if not specified anywhere
+DEFAULT_DECAY: float = 0.97
+
+# Severity → base magnitude
+SEVERITY_SCALE = {
+    1: 0.05,   # mild
+    2: 0.15,   # medium
+    3: 0.30,   # strong
+    4: 0.50,   # extreme
+}
+
+# Influence graph: source emotion → {target emotion: weight}
+# Weight is scaled internally so this stays gentle, not chaotic.
+EMOTION_INFLUENCES: Dict[str, Dict[str, float]] = {
+    "sadness": {
+        "lonely": 0.3,
+        "happiness": -0.15,
+        "excitement": -0.15,
+    },
+    "happiness": {
+        "sadness": -0.15,
+        "fear": -0.1,
+        "connected": 0.2,
+    },
+    "excitement": {
+        "energetic": 0.4,
+        "tired": -0.3,
+        "chill": -0.1,
+    },
+    "supportive": {
+        "connected": 0.3,
+        "lonely": -0.2,
+        "happiness": 0.1,
+    },
+    "anger": {
+        "snarky": 0.3,
+        "stressed": 0.3,
+        "chill": -0.2,
+    },
+    "fear": {
+        "stressed": 0.3,
+        "tired": 0.2,
+    },
+    "lonely": {
+        "connected": -0.3,
+        "sadness": 0.2,
+    },
+    "pride": {
+        "happiness": 0.2,
+        "excitement": 0.2,
+    },
 }
 
 
-class EmotionalState:
-    """Manages MedlarTV's complex emotional state"""
-    
-    def __init__(self):
-        self.emotions: Dict[str, float] = {}
-        self.last_update = time.time()
-        self.load_state()
-    
-    def load_state(self):
-        """Load emotional state from file or create default"""
-        if not os.path.exists(EMOTION_PATH):
-            self._initialize_emotions()
-            self.save_state()
+# ---------------------------------------------------------------------------
+# Personality Trait Loading
+# ---------------------------------------------------------------------------
+
+def _load_personality_traits() -> Dict[str, float]:
+    """
+    Optional: load per-emotion trait multipliers from personality.yaml.
+
+    Expected shape (example):
+
+    traits:
+      supportive: 1.2
+      energetic: 1.3
+      snarky: 1.1
+
+    If the file or 'traits' key is missing, we just return an empty dict,
+    and all emotions use a factor of 1.0 (no modification).
+    """
+    if not PERSONALITY_CONFIG_PATH:
+        return {}
+
+    try:
+        with PERSONALITY_CONFIG_PATH.open("r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+    except Exception as e:
+        log.warning("Failed to load personality.yaml: %s", e)
+        return {}
+
+    traits = data.get("traits") or {}
+    if not isinstance(traits, dict):
+        return {}
+
+    cleaned: Dict[str, float] = {}
+    for key, value in traits.items():
+        try:
+            cleaned[str(key)] = float(value)
+        except Exception:
+            continue
+    return cleaned
+
+
+PERSONALITY_TRAITS: Dict[str, float] = _load_personality_traits()
+
+
+# ---------------------------------------------------------------------------
+# Emotion Config Loading
+# ---------------------------------------------------------------------------
+
+def _load_emotion_config() -> Dict[str, Dict[str, Any]]:
+    """
+    Load emotion baselines/decay from emotions.yaml if present,
+    overlay on top of DEFAULT_EMOTIONS.
+
+    Expected emotions.yaml structure (minimal):
+
+        emotions:
+          happiness:
+            baseline: 0.4
+            decay: 0.92
+          sadness:
+            baseline: 0.1
+
+    'decay' is optional; if missing, we use DEFAULT_DECAY or
+    DEFAULT_EMOTIONS[name]["decay"] if available.
+
+    If the file is missing or badly formatted, DEFAULT_EMOTIONS is used.
+    """
+    config: Dict[str, Dict[str, Any]] = {k: v.copy() for k, v in DEFAULT_EMOTIONS.items()}
+
+    if not EMOTIONS_CONFIG_PATH:
+        return config
+
+    try:
+        with EMOTIONS_CONFIG_PATH.open("r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+    except Exception as e:
+        log.warning("Failed to load emotions.yaml: %s", e)
+        return config
+
+    emotions_section = data.get("emotions")
+    if not isinstance(emotions_section, dict):
+        # Legacy format: maybe it's just a simple mapping name->value
+        # In that case, treat those as baselines.
+        if isinstance(data, dict):
+            for name, baseline in data.items():
+                try:
+                    b = float(baseline)
+                except Exception:
+                    continue
+                if name not in config:
+                    config[name] = {"baseline": b, "decay": DEFAULT_DECAY}
+                else:
+                    config[name]["baseline"] = b
+        return config
+
+    for name, info in emotions_section.items():
+        if not isinstance(info, dict):
+            # allow simple baseline: emotions: { sadness: 0.1 }
+            try:
+                baseline_val = float(info)
+            except Exception:
+                continue
+            cfg = config.get(name, {"baseline": baseline_val, "decay": DEFAULT_DECAY})
+            cfg["baseline"] = baseline_val
+            cfg.setdefault("decay", DEFAULT_DECAY)
+            config[name] = cfg
+            continue
+
+        baseline = info.get("baseline")
+        decay = info.get("decay")
+
+        cfg = config.get(name, {"baseline": 0.0, "decay": DEFAULT_DECAY})
+        if baseline is not None:
+            try:
+                cfg["baseline"] = float(baseline)
+            except Exception:
+                pass
+        if decay is not None:
+            try:
+                cfg["decay"] = float(decay)
+            except Exception:
+                pass
+        config[name] = cfg
+
+    return config
+
+
+EMOTION_CONFIG: Dict[str, Dict[str, Any]] = _load_emotion_config()
+
+
+# ---------------------------------------------------------------------------
+# Sentiment Integration
+# ---------------------------------------------------------------------------
+
+def _analyze_message(message: str) -> Tuple[float, Dict[str, float]]:
+    """
+    Wrap sentiment_advanced.analyze_sentiment_advanced if available.
+
+    Returns:
+        sentiment: float in [-1, 1] (negative to positive)
+        emotion_scores: mapping emotion_name -> score in [0, 1]
+    """
+    try:
+        from MedlarTV.core.sentiment_advanced import analyze_sentiment_advanced  # type: ignore
+    except Exception:
+        # Fallback: neutral sentiment, no specific emotion scores
+        return 0.0, {}
+
+    try:
+        sentiment, emotion_scores = analyze_sentiment_advanced(message)
+        if not isinstance(emotion_scores, dict):
+            emotion_scores = {}
+        # clamp scores to [0, 1]
+        cleaned = {}
+        for k, v in emotion_scores.items():
+            try:
+                fv = float(v)
+            except Exception:
+                continue
+            cleaned[k] = max(0.0, min(1.0, fv))
+        return float(sentiment), cleaned
+    except Exception as e:
+        log.error("Failed to analyze sentiment: %s", e)
+        return 0.0, {}
+
+
+def _estimate_severity(sentiment: float, emotion_scores: Dict[str, float], msg: str) -> int:
+    """
+    Estimate a discrete severity level (1–4) from overall sentiment
+    magnitude and any strong emotion scores.
+
+    This is intentionally simple and heuristic.
+    """
+    mag = abs(sentiment)
+
+    # If any emotion score is very strong, bump severity.
+    max_score = max(emotion_scores.values()) if emotion_scores else 0.0
+
+    # Keyword-based bump for extremely strong phrases
+    lower = msg.lower()
+    strong_keywords = [
+        "my cat died",
+        "my dog died",
+        "they died",
+        "funeral",
+        "i want to die",
+        "i'm devastated",
+    ]
+    extreme_hit = any(k in lower for k in strong_keywords)
+
+    if extreme_hit or max_score > 0.85 or mag > 0.85:
+        return 4
+    if max_score > 0.6 or mag > 0.6:
+        return 3
+    if max_score > 0.35 or mag > 0.35:
+        return 2
+    return 1
+
+
+# ---------------------------------------------------------------------------
+# Emotional System Core
+# ---------------------------------------------------------------------------
+
+class EmotionalSystem:
+    """
+    Core runtime-only emotional model.
+    """
+
+    def __init__(self) -> None:
+        self._config = {k: v.copy() for k, v in EMOTION_CONFIG.items()}
+        self._emotions: Dict[str, float] = {}
+        self._baselines: Dict[str, float] = {}
+        self.last_update: float = time.time()
+
+        self._init_from_config()
+
+        log.debug("[Emotions] __init__ complete. Baselines=%s", self._baselines)
+        print(f"[DEBUG emotions] EmotionalSystem.__init__ baselines={self._baselines}")
+
+    # --------------------------- Setup -----------------------------
+
+    def _init_from_config(self) -> None:
+        for name, cfg in self._config.items():
+            baseline = float(cfg.get("baseline", 0.0))
+            decay = float(cfg.get("decay", DEFAULT_DECAY))
+            cfg["baseline"] = max(0.0, min(1.0, baseline))
+            cfg["decay"] = min(0.999, max(0.5, decay))  # clamp to sensible range
+            self._baselines[name] = cfg["baseline"]
+            self._emotions[name] = cfg["baseline"]
+
+        log.info("[Emotions] Initialized with %d emotions", len(self._emotions))
+
+    # --------------------------- Properties -----------------------------
+
+    @property
+    def emotions(self) -> Dict[str, float]:
+        return dict(self._emotions)
+
+    @property
+    def baselines(self) -> Dict[str, float]:
+        return dict(self._baselines)
+
+    # --------------------------- Core Logic -----------------------------
+
+    def apply_decay(self) -> None:
+        """
+        Decay each emotion toward its baseline using its specific decay rate.
+        """
+        for name, value in list(self._emotions.items()):
+            cfg = self._config.get(name, {})
+            baseline = cfg.get("baseline", self._baselines.get(name, 0.0))
+            decay = cfg.get("decay", DEFAULT_DECAY)
+            try:
+                baseline_f = float(baseline)
+                decay_f = float(decay)
+            except Exception:
+                baseline_f = 0.0
+                decay_f = DEFAULT_DECAY
+
+            new_val = baseline_f + (value - baseline_f) * decay_f
+            self._emotions[name] = self._clamp(new_val)
+
+    def _apply_deltas(self, deltas: Dict[str, float]) -> None:
+        for name, delta in deltas.items():
+            if name not in self._emotions:
+                # Allow new emotions on the fly with neutral baseline.
+                self._emotions[name] = self._clamp(delta)
+                self._baselines.setdefault(name, 0.0)
+                continue
+            self._emotions[name] = self._clamp(self._emotions[name] + delta)
+
+    def _clamp(self, value: float) -> float:
+        return max(0.0, min(1.0, value))
+
+    def apply_influences(self) -> None:
+        """
+        Apply cross-emotion influence in a gentle way to avoid chaotic swings.
+        """
+        updates: Dict[str, float] = {}
+
+        for src, targets in EMOTION_INFLUENCES.items():
+            src_val = self._emotions.get(src)
+            if src_val is None:
+                continue
+            for target, weight in targets.items():
+                # Small factor to keep it subtle.
+                influence = src_val * weight * 0.1
+                updates[target] = updates.get(target, 0.0) + influence
+
+        if updates:
+            for name, delta in updates.items():
+                if name not in self._emotions:
+                    # if unknown, create with baseline 0
+                    self._emotions[name] = self._clamp(delta)
+                    self._baselines.setdefault(name, 0.0)
+                else:
+                    self._emotions[name] = self._clamp(self._emotions[name] + delta)
+
+    def _compute_deltas_from_scores(
+        self,
+        sentiment: float,
+        emotion_scores: Dict[str, float],
+        severity: int,
+    ) -> Dict[str, float]:
+        """
+        Turn sentiment + per-emotion scores into actual numeric deltas.
+        """
+        base_mag = SEVERITY_SCALE.get(severity, SEVERITY_SCALE[1])
+        deltas: Dict[str, float] = {}
+
+        # If we have specific emotion scores, use them.
+        if emotion_scores:
+            # Normalize scores so max is 1 (if necessary).
+            max_score = max(emotion_scores.values())
+            norm_factor = 1.0 / max_score if max_score > 1.0 else 1.0
+
+            for name, raw_score in emotion_scores.items():
+                score = raw_score * norm_factor
+                # Positive sentiment: focus on positive-leaning emotions.
+                # Negative sentiment: focus on negative-leaning emotions.
+                # Neutral: let specific emotion scores drive the changes.
+                if sentiment >= 0.25:
+                    if name in ("happiness", "excitement", "supportive", "connected", "pride", "energetic"):
+                        delta = base_mag * score
+                    elif name in ("sadness", "anger", "fear", "lonely", "stressed", "tired", "jealousy"):
+                        delta = -base_mag * score * 0.5
+                    else:
+                        delta = base_mag * (score - 0.4)
+                elif sentiment <= -0.25:
+                    if name in ("sadness", "anger", "fear", "lonely", "stressed", "jealousy"):
+                        delta = base_mag * score
+                    elif name in ("happiness", "excitement", "supportive", "connected", "pride", "energetic"):
+                        delta = -base_mag * score * 0.5
+                    else:
+                        delta = base_mag * (score - 0.4)
+                else:
+                    # Low overall sentiment magnitude → rely mostly on emotion_scores.
+                    delta = base_mag * (score - 0.5)
+
+                if abs(delta) < 1e-4:
+                    continue
+                deltas[name] = deltas.get(name, 0.0) + delta
+
         else:
-            with open(EMOTION_PATH, 'r', encoding='utf-8') as f:
-                data = yaml.safe_load(f) or {}
-                self.emotions = data.get('emotions', {})
-                self.last_update = data.get('last_update', time.time())
-            
-            # Ensure all emotions exist
-            for emotion, config in EMOTIONS.items():
-                if emotion not in self.emotions:
-                    self.emotions[emotion] = config['baseline']
-    
-    def _initialize_emotions(self):
-        """Set all emotions to baseline"""
-        for emotion, config in EMOTIONS.items():
-            self.emotions[emotion] = config['baseline']
-    
-    def save_state(self):
-        """Save emotional state to file"""
-        os.makedirs(os.path.dirname(EMOTION_PATH), exist_ok=True)
-        data = {
-            'emotions': self.emotions,
-            'last_update': self.last_update,
-            'timestamp': datetime.now().isoformat()
-        }
-        with open(EMOTION_PATH, 'w', encoding='utf-8') as f:
-            yaml.safe_dump(data, f)
-    
-    def apply_decay(self):
-        """Apply natural emotional decay over time (emotions return to baseline)"""
-        current_time = time.time()
-        time_passed = current_time - self.last_update
-        
-        # Apply decay every second
-        if time_passed > 0:
-            for emotion, config in EMOTIONS.items():
-                baseline = config['baseline']
-                decay_rate = config['decay_rate']
-                current_value = self.emotions.get(emotion, baseline)
-                
-                # Move toward baseline (exponential decay)
-                # Faster decay when far from baseline
-                diff = current_value - baseline
-                decay_factor = decay_rate ** time_passed
-                self.emotions[emotion] = baseline + (diff * decay_factor)
-                
-                # Clamp values between 0 and 1
-                self.emotions[emotion] = max(0.0, min(1.0, self.emotions[emotion]))
-            
-            self.last_update = current_time
-    
-    def process_message(self, message: str, sentiment: float = 0.0):
+            # No detailed emotion scores: fall back to general sentiment.
+            if sentiment > 0.1:
+                for name in ("happiness", "excitement", "supportive", "connected", "pride", "energetic"):
+                    deltas[name] = deltas.get(name, 0.0) + base_mag * float(sentiment)
+                for name in ("sadness", "anger", "fear", "lonely", "stressed", "tired"):
+                    deltas[name] = deltas.get(name, 0.0) - base_mag * float(sentiment) * 0.5
+            elif sentiment < -0.1:
+                for name in ("sadness", "anger", "fear", "lonely", "stressed", "tired"):
+                    deltas[name] = deltas.get(name, 0.0) + base_mag * float(-sentiment)
+                for name in ("happiness", "excitement", "supportive", "connected", "pride", "energetic"):
+                    deltas[name] = deltas.get(name, 0.0) - base_mag * float(-sentiment) * 0.5
+
+        return deltas
+
+    def _apply_personality(self, deltas: Dict[str, float]) -> Dict[str, float]:
         """
-        Process a chat message and update emotional state
-        
-        Args:
-            message: The chat message text
-            sentiment: Overall sentiment score (-1.0 to 1.0)
+        Apply personality multipliers from PERSONALITY_TRAITS.
+
+        Example traits mapping:
+
+            traits:
+              supportive: 1.2
+              energetic: 1.3
+              snarky: 1.15
         """
-        # Apply decay first
+        if not PERSONALITY_TRAITS:
+            return deltas
+
+        adjusted: Dict[str, float] = {}
+        for name, delta in deltas.items():
+            factor = PERSONALITY_TRAITS.get(name, 1.0)
+            adjusted[name] = delta * factor
+        return adjusted
+
+    # --------------------------- Public Ops -----------------------------
+
+    def process_message(self, message: str, username: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Main entry: call this once per chat message to update emotional state.
+
+        Returns a diagnostic dict with sentiment, severity, and new emotion snapshot.
+        """
+        print(f"[DEBUG emotions] process_message() called with message='{message}' username={username}")
+
+        # 1) Decay toward baseline first
         self.apply_decay()
-        
-        message_lower = message.lower()
-        
-        # Detect emotions from keywords
-        detected_emotions = {}
-        for emotion, config in EMOTIONS.items():
-            keyword_matches = sum(1 for keyword in config['keywords'] if keyword in message_lower)
-            if keyword_matches > 0:
-                # Strength based on keyword frequency
-                strength = min(keyword_matches * 0.2, 0.5)
-                detected_emotions[emotion] = strength
-        
-        # If no keywords detected, use sentiment to adjust base emotions
-        if not detected_emotions:
-            if sentiment > 0.3:
-                detected_emotions['happiness'] = sentiment * 0.3
-                detected_emotions['excitement'] = sentiment * 0.2
-            elif sentiment < -0.3:
-                detected_emotions['sadness'] = abs(sentiment) * 0.2
-                detected_emotions['anger'] = abs(sentiment) * 0.1
-        
-        # Apply detected emotions
-        for emotion, strength in detected_emotions.items():
-            self._adjust_emotion(emotion, strength)
-        
-        self.save_state()
-    
-    def _adjust_emotion(self, emotion: str, amount: float):
-        """
-        Adjust an emotion and apply influences to related emotions
-        
-        Args:
-            emotion: The emotion to adjust
-            amount: Amount to increase (positive) or decrease (negative)
-        """
-        if emotion not in self.emotions:
-            return
-        
-        # Apply direct change
-        self.emotions[emotion] += amount
-        self.emotions[emotion] = max(0.0, min(1.0, self.emotions[emotion]))
-        
-        # Apply influences to related emotions
-        if emotion in EMOTION_INFLUENCES:
-            influences = EMOTION_INFLUENCES[emotion]
-            for influenced_emotion, influence_amount in influences.items():
-                if influenced_emotion in self.emotions:
-                    # Influence is proportional to the change
-                    influence = influence_amount * amount * 0.5
-                    self.emotions[influenced_emotion] += influence
-                    self.emotions[influenced_emotion] = max(0.0, min(1.0, self.emotions[influenced_emotion]))
-    
-    def get_dominant_emotion(self) -> str:
-        """Get the currently strongest emotion"""
-        if not self.emotions:
-            return "chill"
-        return max(self.emotions, key=self.emotions.get)
-    
-    def get_emotional_state(self) -> Dict[str, float]:
-        """Get all current emotion values"""
-        return self.emotions.copy()
-    
-    def get_top_emotions(self, n: int = 3) -> Dict[str, float]:
-        """Get the top N strongest emotions"""
-        sorted_emotions = sorted(self.emotions.items(), key=lambda x: x[1], reverse=True)
-        return dict(sorted_emotions[:n])
-    
-    def get_mood_description(self) -> str:
-        """Get a natural language description of current mood"""
-        top_3 = self.get_top_emotions(3)
-        
-        emotions_list = []
-        for emotion, value in top_3.items():
-            if value > 0.6:
-                intensity = "very"
-            elif value > 0.4:
-                intensity = "moderately"
-            else:
-                intensity = "slightly"
-            emotions_list.append(f"{intensity} {emotion}")
-        
-        return ", ".join(emotions_list)
-    
-    def manual_set_emotion(self, emotion: str, value: float):
-        """Manually set an emotion (for commands)"""
-        if emotion in self.emotions:
-            self.emotions[emotion] = max(0.0, min(1.0, value))
-            self.save_state()
-    
-    def boost_emotion(self, emotion: str, amount: float = 0.3):
-        """Boost a specific emotion (for events like raids, subs)"""
-        self._adjust_emotion(emotion, amount)
-        self.save_state()
-    
-    def reset_to_baseline(self):
-        """Reset all emotions to baseline"""
-        self._initialize_emotions()
+        print(f"[DEBUG emotions] After decay: {self._emotions}")
+
+        # 2) Analyze sentiment & per-emotion scores
+        sentiment, emotion_scores = _analyze_message(message)
+        print(f"[DEBUG emotions] Sentiment={sentiment}, emotion_scores={emotion_scores}")
+
+        # 3) Estimate severity 1–4
+        severity = _estimate_severity(sentiment, emotion_scores, message)
+        print(f"[DEBUG emotions] Severity estimated={severity}")
+
+        # 4) Compute raw deltas
+        deltas = self._compute_deltas_from_scores(sentiment, emotion_scores, severity)
+        print(f"[DEBUG emotions] Raw deltas={deltas}")
+
+        # 5) Apply personality multipliers
+        deltas = self._apply_personality(deltas)
+        print(f"[DEBUG emotions] Personality-adjusted deltas={deltas}")
+
+        # 6) Apply the deltas
+        self._apply_deltas(deltas)
+        print(f"[DEBUG emotions] After applying deltas: {self._emotions}")
+
+        # 7) Ripple through influence graph
+        self.apply_influences()
+        print(f"[DEBUG emotions] After influences: {self._emotions}")
+
         self.last_update = time.time()
-        self.save_state()
+
+        snapshot = self.emotions
+        print(f"[DEBUG emotions] Final snapshot returned: {snapshot}")
+
+        return {
+            "sentiment": sentiment,
+            "severity": severity,
+            "deltas": deltas,
+            "emotions": snapshot,
+        }
+
+    # ------------------------------------------------------------------
+
+    def reset_to_baseline(self) -> None:
+        """
+        Reset all emotions to their configured baselines.
+        Called at startup and should be used on shutdown if needed.
+        """
+        for name, baseline in self._baselines.items():
+            self._emotions[name] = baseline
+        self.last_update = time.time()
+        log.info("[Emotions] Reset to baseline")
+
+    def boost(self, name: str, amount: float = 0.1) -> None:
+        """
+        Manual boost of a specific emotion (e.g., from commands).
+        """
+        if name not in self._emotions:
+            # create a new emotion track if needed
+            self._emotions[name] = self._clamp(amount)
+            self._baselines.setdefault(name, 0.0)
+        else:
+            self._emotions[name] = self._clamp(self._emotions[name] + amount)
+
+    # ------------------------------------------------------------------
+
+    def get_dominant_emotion(self) -> Optional[str]:
+        if not self._emotions:
+            return None
+        return max(self._emotions.items(), key=lambda kv: kv[1])[0]
+
+    def get_top_emotions(self, n: int = 3) -> Dict[str, float]:
+        items = sorted(self._emotions.items(), key=lambda kv: kv[1], reverse=True)
+        return dict(items[:n])
+
+    def get_mood_description(self) -> str:
+        """
+        Lightweight human-readable mood summary using all emotions.
+
+        This is intentionally simple and can later be delegated to mood_system.
+        """
+        if not self._emotions:
+            return "Neutral"
+
+        dom = self.get_dominant_emotion()
+        if not dom:
+            return "Neutral"
+
+        # High-level groupings
+        pos = sum(self._emotions.get(e, 0.0) for e in ("happiness", "excitement", "supportive", "connected", "pride"))
+        neg = sum(self._emotions.get(e, 0.0) for e in ("sadness", "anger", "fear", "lonely", "stressed", "jealousy"))
+        energy = self._emotions.get("energetic", 0.0) - self._emotions.get("tired", 0.0)
+        snark = self._emotions.get("snarky", 0.0)
+        chill = self._emotions.get("chill", 0.0)
+
+        if neg > pos and self._emotions.get("sadness", 0.0) > 0.5:
+            if self._emotions.get("lonely", 0.0) > 0.4:
+                return "Feeling fragile and a bit isolated."
+            return "Feeling pretty down and heavy."
+        if pos > neg and self._emotions.get("excitement", 0.0) > 0.6:
+            return "Hyped and in a really good mood."
+        if pos > neg and chill > 0.6:
+            return "Warm, calm, and relaxed."
+        if snark > 0.6 and self._emotions.get("anger", 0.0) > 0.3:
+            return "Spicy, annoyed, but still present."
+        if energy < -0.3:
+            return "Low energy, a bit drained."
+        if energy > 0.5:
+            return "Energetic and ready to engage."
+
+        # Fallback: describe by dominant emotion
+        return f"Mostly feeling {dom}."
+
+    # Convenience snapshots ------------------------------------------------
+
+    def snapshot(self) -> Dict[str, float]:
+        return self.emotions
 
 
-# --- Global instance ---
-_emotional_state = None
+# ---------------------------------------------------------------------------
+# Module-level Singleton & API
+# ---------------------------------------------------------------------------
 
-def get_emotional_system() -> EmotionalState:
-    """Get the global emotional system instance"""
-    global _emotional_state
-    if _emotional_state is None:
-        _emotional_state = EmotionalState()
-    return _emotional_state
+_emotional_system: Optional[EmotionalSystem] = None
 
 
-# --- Convenience functions for backward compatibility ---
-def process_chat_emotion(message: str, sentiment: float = 0.0):
-    """Process a chat message's emotional impact"""
+def get_emotional_system() -> EmotionalSystem:
+    global _emotional_system
+    print("[DEBUG emotions] get_emotional_system() called")
+    if _emotional_system is None:
+        print("[DEBUG emotions] No existing EmotionalSystem, creating new one...")
+        _emotional_system = EmotionalSystem()
+        log.info("[Emotions] Emotional system created")
+    else:
+        print("[DEBUG emotions] Reusing existing EmotionalSystem instance")
+    return _emotional_system
+
+def process_chat_emotion(message: str, username: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Backwards-compatible wrapper used by other parts of the system.
+
+    Returns the same diagnostic dict as EmotionalSystem.process_message().
+    """
     system = get_emotional_system()
-    system.process_message(message, sentiment)
+    return system.process_message(message, username=username)
 
 
-def get_current_emotion() -> str:
-    """Get the dominant emotion (for mood display)"""
+def get_current_emotion() -> Optional[str]:
     system = get_emotional_system()
     return system.get_dominant_emotion()
 
 
 def get_emotion_state() -> Dict[str, float]:
-    """Get all emotion values"""
     system = get_emotional_system()
-    return system.get_emotional_state()
+    return system.snapshot()
 
 
-def boost_emotion(emotion: str, amount: float = 0.3):
-    """Boost an emotion (for special events)"""
+def boost_emotion(name: str, amount: float = 0.1) -> None:
     system = get_emotional_system()
-    system.boost_emotion(emotion, amount)
+    system.boost(name, amount)
 
 
-def reset_emotions():
-    """Reset all emotions to baseline"""
+def reset_emotions() -> None:
     system = get_emotional_system()
     system.reset_to_baseline()
-
-
-# --- Example usage ---
-if __name__ == "__main__":
-    print("=" * 60)
-    print("MedlarTV Advanced Emotional System - Demo")
-    print("=" * 60)
-    
-    emo = EmotionalState()
-    
-    print("\n--- Initial State ---")
-    print(f"Dominant: {emo.get_dominant_emotion()}")
-    print(f"Top 3: {emo.get_top_emotions(3)}")
-    
-    print("\n--- Processing Messages ---")
-    messages = [
-        ("OMG THIS IS AMAZING!", 0.9),
-        ("I'm so happy to be here!", 0.8),
-        ("Ugh this is frustrating", -0.6),
-        ("Thanks so much for the help!", 0.7),
-        ("I'm tired and stressed", -0.4),
-    ]
-    
-    for msg, sentiment in messages:
-        print(f"\nMessage: '{msg}'")
-        emo.process_message(msg, sentiment)
-        print(f"Dominant: {emo.get_dominant_emotion()}")
-        print(f"Top 3: {emo.get_top_emotions(3)}")
-        print(f"Description: {emo.get_mood_description()}")
-    
-    print("\n--- Testing Decay (5 seconds) ---")
-    time.sleep(5)
-    emo.apply_decay()
-    print(f"After decay - Dominant: {emo.get_dominant_emotion()}")
-    print(f"Top 3: {emo.get_top_emotions(3)}")

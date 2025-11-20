@@ -17,7 +17,6 @@ all_caps_state = {
     "last_used": 0
 }
 
-
 def load_filter_config():
     """Load the content filter configuration."""
     config_path = Path("MedlarTV/config/content_filter.yaml")
@@ -48,11 +47,9 @@ def load_filter_config():
     with open(config_path, 'r', encoding='utf-8') as f:
         return yaml.safe_load(f) or {}
 
-
 def normalize_text(text):
     """Normalize text for comparison (lowercase, remove special chars)."""
     return re.sub(r'[^a-z0-9\s]', '', text.lower())
-
 
 def contains_blocked_word(text, blocked_words):
     """Check if text contains any blocked words."""
@@ -86,7 +83,6 @@ def contains_blocked_word(text, blocked_words):
     
     return False, None
 
-
 def contains_blocked_topic(text, blocked_topics):
     """Check if text discusses blocked topics."""
     normalized = normalize_text(text)
@@ -97,7 +93,6 @@ def contains_blocked_topic(text, blocked_topics):
             return True, topic
     
     return False, None
-
 
 def should_enable_all_caps(message):
     """Check if message wants all caps mode, and if it's allowed."""
@@ -182,7 +177,6 @@ def apply_all_caps_mode(text):
     
     return text.upper()
 
-
 def limit_emojis(text):
     """Limit the number of emojis in a message."""
     config = load_filter_config()
@@ -217,8 +211,9 @@ def limit_emojis(text):
     
     return text
 
-
 def filter_message(text, username=None):
+    print(f"[DEBUG Filter] Incoming text='{text}' username={username}")
+
     """
     Main filter function. Returns (is_safe, filtered_text, reason).
     
@@ -233,7 +228,10 @@ def filter_message(text, username=None):
         config.get("blocked_words", [])
     )
     if has_blocked:
+        print(f"[DEBUG Filter] BLOCKED WORD: '{word}' in '{text}'")
         return False, None, f"Contains blocked word: {word}"
+    else:
+        print("[DEBUG Filter] No blocked words found")
     
     # Check for blocked topics
     has_topic, topic = contains_blocked_topic(
@@ -241,7 +239,11 @@ def filter_message(text, username=None):
         config.get("blocked_topics", [])
     )
     if has_topic:
+        print(f"[DEBUG Filter] BLOCKED TOPIC: '{topic}' in '{text}'")
         return False, None, f"Discusses blocked topic: {topic}"
+    else:
+        print("[DEBUG Filter] No blocked topics found")
+
     
     # Check protected users (don't @mention them)
     protected = config.get("safety", {}).get("protected_users", [])
@@ -250,16 +252,21 @@ def filter_message(text, username=None):
         text = re.sub(rf'@{username}\b', username, text, flags=re.IGNORECASE)
     
     # Apply emoji limit
+    print(f"[DEBUG Filter] Before emoji limit: '{text}'")
     text = limit_emojis(text)
+    print(f"[DEBUG Filter] After emoji limit: '{text}'")
     
     # Apply all caps mode if active (THIS IS THE KEY PART)
+    print(f"[DEBUG Filter] Before caps mode: '{text}'")
     text = apply_all_caps_mode(text)
+    print(f"[DEBUG Filter] After caps mode: '{text}'")
     
     # Enforce max length
     max_length = config.get("safety", {}).get("max_message_length", 500)
     if len(text) > max_length:
         text = text[:max_length-3] + "..."
     
+    print(f"[DEBUG Filter] Final output: '{text}'")
     return True, text, None
 
 

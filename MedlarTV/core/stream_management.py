@@ -1,424 +1,493 @@
 """
-MedlarTV Stream Management Module
-Twitch API integration for changing title, category, reading stream info, etc.
+MedlarTV Stream Management (fixed tokens & headers)
+---------------------------------------------------
+Uses:
+  - APP_TWITCH_CLIENT_ID + APP_SECRET_ID for APP access token
+  - DEVILMEDLAR_TWITCH_CLIENT_ID + DEVILMEDLAR_TWITCH_TOKEN for
+    broadcaster actions (title/category updates)
+Matches the behaviour of test_api_direct.py you ran.
 """
 
+from __future__ import annotations
+
 import os
+import time
+import logging
+from typing import Optional, Dict, Any
+
 import requests
-from typing import Optional, Dict, List
-from datetime import datetime, timedelta
 
-# Twitch API credentials
-TWITCH_CLIENT_ID = os.getenv("TWITCH_CLIENT_ID", "")
-TWITCH_CLIENT_SECRET = os.getenv("TWITCH_CLIENT_SECRET", "")
-TWITCH_CHANNEL = os.getenv("TWITCH_CHANNEL", "").lstrip("#")
+log = logging.getLogger("stream")
 
-# API endpoints
+print("[DEBUG stream_management] Loaded stream_management.py")
+
+TWITCH_AUTH_BASE = "https://id.twitch.tv/oauth2"
 TWITCH_API_BASE = "https://api.twitch.tv/helix"
-TWITCH_AUTH_URL = "https://id.twitch.tv/oauth2/token"
 
-# Cache
-_access_token = None
-_token_expires_at = None
-_broadcaster_id = None
+# --- ENV / CONFIG -----------------------------------------------------------
+
+APP_CLIENT_ID = os.getenv("APP_TWITCH_CLIENT_ID", "").strip()
+APP_CLIENT_SECRET = os.getenv("APP_SECRET_ID", "").strip()
+
+BROADCASTER_CLIENT_ID = os.getenv("DEVILMEDLAR_TWITCH_CLIENT_ID", "").strip()
+BROADCASTER_TOKEN_RAW = os.getenv("DEVILMEDLAR_TWITCH_TOKEN", "").strip()
+
+print(f"[DEBUG stream_management] ENV loaded: "
+      f"APP_CLIENT_ID_set={bool(APP_CLIENT_ID)} "
+      f"APP_CLIENT_SECRET_set={bool(APP_CLIENT_SECRET)} "
+      f"BROADCASTER_CLIENT_ID_set={bool(BROADCASTER_CLIENT_ID)} "
+      f"BROADCASTER_TOKEN_RAW_set={bool(BROADCASTER_TOKEN_RAW)}")
+
+# Strip leading "oauth:" if present
+if BROADCASTER_TOKEN_RAW.startswith("oauth:"):
+    BROADCASTER_TOKEN = BROADCASTER_TOKEN_RAW.split("oauth:", 1)[1]
+    print("[DEBUG stream_management] Stripped 'oauth:' prefix from BROADCASTER_TOKEN_RAW")
+else:
+    BROADCASTER_TOKEN = BROADCASTER_TOKEN_RAW
+    print("[DEBUG stream_management] BROADCASTER_TOKEN_RAW used as-is (no 'oauth:' prefix)")
+
+CHANNEL_NAME = os.getenv("TWITCH_CHANNEL", "#devilmedlar").lstrip("#")
+print(f"[DEBUG stream_management] CHANNEL_NAME resolved to='{CHANNEL_NAME}'")
+
+# --- INTERNAL STATE ---------------------------------------------------------
+
+_app_token: Optional[str] = None
+_app_token_expiry: float = 0.0
+_broadcaster_id: Optional[str] = None
+
+
+# --- HELPERS ----------------------------------------------------------------
+
+def _ensure_app_token() -> Optional[str]:
+    """
+    Get (and cache) an APP access token using client_credentials.
+
+    Uses APP_TWITCH_CLIENT_ID + APP_SECRET_ID exactly like test_api_direct.py.
+    """
+    print("[DEBUG stream_management] _ensure_app_token() called")
+    global _app_token, _app_token_expiry
+
+    now = time.time()
+    print(f"[DEBUG stream_management] _app_token_set={bool(_app_token)} "
+          f"now={now} expiry={_app_token_expiry}")
+
+    if _app_token and now < _app_token_expiry - 60:
+        print("[DEBUG stream_management] Using cached APP token")
+        return _app_token
+
+    if not APP_CLIENT_ID or not APP_CLIENT_SECRET:
+        print("[DEBUG stream_management] Missing APP_CLIENT_ID or APP_CLIENT_SECRET")
+        log.error("[Stream] Missing APP_TWITCH_CLIENT_ID or APP_SECRET_ID in environment")
+        return None
+
+    data = {
+        "client_id": APP_CLIENT_ID,
+        "client_secret": APP_CLIENT_SECRET,
+        "grant_type": "client_credentials",
+    }
+
+    print(f"[DEBUG stream_management] Requesting new APP token at {TWITCH_AUTH_BASE}/token")
+    try:
+        resp = requests.post(f"{TWITCH_AUTH_BASE}/token", data=data, timeout=15)
+    except Exception as e:  # pragma: no cover
+        print(f"[DEBUG stream_management] Exception while requesting app token: {e}")
+        log.error(f"[Stream] Error requesting app token: {e}")
+        return None
+
+    print(f"[DEBUG stream_management] App token response status={resp.status_code}")
+    if resp.status_code != 200:
+        print(f"[DEBUG stream_management] App token failure body={resp.text[:500]}")
+        log.error(f"[Stream] App token failed: {resp.status_code} - {resp.text}")
+        return None
+
+    body = resp.json()
+    _app_token = body.get("access_token")
+    expires_in = int(body.get("expires_in", 3600))
+    _app_token_expiry = now + expires_in
+
+    print(f"[DEBUG stream_management] New APP token acquired: token_set={bool(_app_token)} "
+          f"expires_in={expires_in}s new_expiry={_app_token_expiry}")
+    log.info("[Stream] Got new APP access token")
+    return _app_token
 
 
 def get_access_token() -> Optional[str]:
-    """Get or refresh OAuth access token for Twitch API"""
-    global _access_token, _token_expires_at
-    
-    # Return cached token if still valid
-    if _access_token and _token_expires_at and datetime.now() < _token_expires_at:
-        return _access_token
-    
-    if not TWITCH_CLIENT_ID or not TWITCH_CLIENT_SECRET:
-        print("[Stream] Missing Twitch API credentials in .env")
-        return None
-    
-    try:
-        response = requests.post(TWITCH_AUTH_URL, params={
-            "client_id": TWITCH_CLIENT_ID,
-            "client_secret": TWITCH_CLIENT_SECRET,
-            "grant_type": "client_credentials"
-        })
-        
-        if response.status_code == 200:
-            data = response.json()
-            _access_token = data["access_token"]
-            expires_in = data["expires_in"]
-            _token_expires_at = datetime.now() + timedelta(seconds=expires_in - 300)  # 5 min buffer
-            print("[Stream] Got new access token")
-            return _access_token
-        else:
-            print(f"[Stream] Failed to get access token: {response.status_code}")
-            return None
-            
-    except Exception as e:
-        print(f"[Stream] Error getting access token: {e}")
-        return None
+    """
+    Public helper used by !status.
+    Returns current APP token or None.
+    """
+    print("[DEBUG stream_management] get_access_token() called")
+    token = _ensure_app_token()
+    print(f"[DEBUG stream_management] get_access_token() returning token_set={bool(token)}")
+    return token
 
+
+def _app_headers(token: Optional[str] = None) -> Dict[str, str]:
+    print("[DEBUG stream_management] _app_headers() called")
+    tok = token or _ensure_app_token()
+    print(f"[DEBUG stream_management] _app_headers() tok_set={bool(tok)}")
+    if not tok:
+        return {}
+    headers = {
+        "Client-ID": APP_CLIENT_ID,
+        "Authorization": f"Bearer {tok}",
+    }
+    print(f"[DEBUG stream_management] _app_headers() built headers with Client-ID_set={bool(APP_CLIENT_ID)}")
+    return headers
+
+
+def _broadcaster_headers() -> Dict[str, str]:
+    print("[DEBUG stream_management] _broadcaster_headers() called")
+    if not BROADCASTER_CLIENT_ID or not BROADCASTER_TOKEN:
+        print("[DEBUG stream_management] Missing BROADCASTER_CLIENT_ID or BROADCASTER_TOKEN")
+        return {}
+    headers = {
+        "Client-ID": BROADCASTER_CLIENT_ID,
+        "Authorization": f"Bearer {BROADCASTER_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    print(f"[DEBUG stream_management] _broadcaster_headers() built headers with "
+          f"Client-ID_set={bool(BROADCASTER_CLIENT_ID)} token_set={bool(BROADCASTER_TOKEN)}")
+    return headers
+
+
+# --- BROADCASTER / CHANNEL LOOKUPS -----------------------------------------
 
 def get_broadcaster_id() -> Optional[str]:
-    """Get broadcaster ID for the configured channel"""
+    """Get numeric broadcaster_id for CHANNEL_NAME via APP token."""
+    print("[DEBUG stream_management] get_broadcaster_id() called")
     global _broadcaster_id
-    
+
     if _broadcaster_id:
+        print(f"[DEBUG stream_management] Using cached broadcaster_id={_broadcaster_id}")
         return _broadcaster_id
-    
-    token = get_access_token()
+
+    token = _ensure_app_token()
+    print(f"[DEBUG stream_management] get_broadcaster_id() token_set={bool(token)}")
     if not token:
         return None
-    
+
+    headers = _app_headers(token)
+    params = {"login": CHANNEL_NAME}
+    print(f"[DEBUG stream_management] Requesting /users for login='{CHANNEL_NAME}'")
+
     try:
-        headers = {
-            "Client-ID": TWITCH_CLIENT_ID,
-            "Authorization": f"Bearer {token}"
-        }
-        
-        response = requests.get(
-            f"{TWITCH_API_BASE}/users",
-            headers=headers,
-            params={"login": TWITCH_CHANNEL}
-        )
-        
-        if response.status_code == 200:
-            data = response.json()
-            if data["data"]:
-                _broadcaster_id = data["data"][0]["id"]
-                print(f"[Stream] Got broadcaster ID: {_broadcaster_id}")
-                return _broadcaster_id
-        
-        print(f"[Stream] Failed to get broadcaster ID: {response.status_code}")
-        return None
-        
-    except Exception as e:
-        print(f"[Stream] Error getting broadcaster ID: {e}")
+        resp = requests.get(f"{TWITCH_API_BASE}/users", headers=headers, params=params, timeout=15)
+    except Exception as e:  # pragma: no cover
+        print(f"[DEBUG stream_management] Exception fetching broadcaster id: {e}")
+        log.error(f"[Stream] Error fetching broadcaster id: {e}")
         return None
 
-
-def get_stream_info() -> Optional[Dict]:
-    """
-    Get current stream information (title, category, viewer count, etc.)
-    
-    Returns:
-        Dict with stream info or None if offline/error
-    """
-    token = get_access_token()
-    broadcaster_id = get_broadcaster_id()
-    
-    if not token or not broadcaster_id:
+    print(f"[DEBUG stream_management] /users status={resp.status_code}")
+    if resp.status_code != 200:
+        print(f"[DEBUG stream_management] /users error body={resp.text[:500]}")
+        log.error(f"[Stream] Failed to get broadcaster id: {resp.status_code} - {resp.text}")
         return None
-    
+
+    data = resp.json().get("data", [])
+    print(f"[DEBUG stream_management] /users returned {len(data)} records")
+    if not data:
+        log.error("[Stream] No user data returned for channel '%s'", CHANNEL_NAME)
+        return None
+
+    _broadcaster_id = data[0]["id"]
+    print(f"[DEBUG stream_management] broadcaster_id resolved to={_broadcaster_id}")
+    log.info("[Stream] Broadcaster id resolved: %s", _broadcaster_id)
+    return _broadcaster_id
+
+
+def get_channel_info() -> Optional[Dict[str, Any]]:
+    """Return /channels info for the broadcaster (title, game, tags, etc.)."""
+    print("[DEBUG stream_management] get_channel_info() called")
+    token = _ensure_app_token()
+    bid = get_broadcaster_id()
+    print(f"[DEBUG stream_management] get_channel_info() token_set={bool(token)} bid={bid}")
+    if not (token and bid):
+        return None
+
+    headers = _app_headers(token)
+    params = {"broadcaster_id": bid}
+    print(f"[DEBUG stream_management] Requesting /channels for broadcaster_id={bid}")
+
     try:
-        headers = {
-            "Client-ID": TWITCH_CLIENT_ID,
-            "Authorization": f"Bearer {token}"
-        }
-        
-        response = requests.get(
-            f"{TWITCH_API_BASE}/streams",
-            headers=headers,
-            params={"user_id": broadcaster_id}
-        )
-        
-        if response.status_code == 200:
-            data = response.json()
-            if data["data"]:
-                stream = data["data"][0]
-                return {
-                    "is_live": True,
-                    "title": stream["title"],
-                    "game_name": stream["game_name"],
-                    "game_id": stream["game_id"],
-                    "viewer_count": stream["viewer_count"],
-                    "started_at": stream["started_at"],
-                    "language": stream["language"],
-                    "thumbnail_url": stream["thumbnail_url"]
-                }
-            else:
-                return {"is_live": False}
-        
-        print(f"[Stream] Failed to get stream info: {response.status_code}")
-        return None
-        
-    except Exception as e:
-        print(f"[Stream] Error getting stream info: {e}")
+        resp = requests.get(f"{TWITCH_API_BASE}/channels", headers=headers, params=params, timeout=15)
+    except Exception as e:  # pragma: no cover
+        print(f"[DEBUG stream_management] Exception fetching channel info: {e}")
+        log.error(f"[Stream] Error fetching channel info: {e}")
         return None
 
-
-def get_channel_info() -> Optional[Dict]:
-    """
-    Get channel information (always available, even when offline)
-    
-    Returns:
-        Dict with channel info
-    """
-    token = get_access_token()
-    broadcaster_id = get_broadcaster_id()
-    
-    if not token or not broadcaster_id:
+    print(f"[DEBUG stream_management] /channels status={resp.status_code}")
+    if resp.status_code != 200:
+        print(f"[DEBUG stream_management] /channels error body={resp.text[:500]}")
+        log.error(f"[Stream] Failed to get channel info: {resp.status_code} - {resp.text}")
         return None
-    
+
+    items = resp.json().get("data", [])
+    print(f"[DEBUG stream_management] /channels returned {len(items)} records")
+    return items[0] if items else None
+
+
+def get_stream_info() -> Optional[Dict[str, Any]]:
+    """Return /streams info (live status, viewer count, etc.)."""
+    print("[DEBUG stream_management] get_stream_info() called")
+    token = _ensure_app_token()
+    bid = get_broadcaster_id()
+    print(f"[DEBUG stream_management] get_stream_info() token_set={bool(token)} bid={bid}")
+    if not (token and bid):
+        return None
+
+    headers = _app_headers(token)
+    params = {"user_id": bid}
+    print(f"[DEBUG stream_management] Requesting /streams for user_id={bid}")
+
     try:
-        headers = {
-            "Client-ID": TWITCH_CLIENT_ID,
-            "Authorization": f"Bearer {token}"
-        }
-        
-        response = requests.get(
-            f"{TWITCH_API_BASE}/channels",
-            headers=headers,
-            params={"broadcaster_id": broadcaster_id}
-        )
-        
-        if response.status_code == 200:
-            data = response.json()
-            if data["data"]:
-                channel = data["data"][0]
-                return {
-                    "broadcaster_name": channel["broadcaster_name"],
-                    "broadcaster_language": channel["broadcaster_language"],
-                    "game_name": channel["game_name"],
-                    "game_id": channel["game_id"],
-                    "title": channel["title"],
-                    "delay": channel.get("delay", 0)
-                }
-        
-        print(f"[Stream] Failed to get channel info: {response.status_code}")
-        return None
-        
-    except Exception as e:
-        print(f"[Stream] Error getting channel info: {e}")
+        resp = requests.get(f"{TWITCH_API_BASE}/streams", headers=headers, params=params, timeout=15)
+    except Exception as e:  # pragma: no cover
+        print(f"[DEBUG stream_management] Exception fetching stream info: {e}")
+        log.error(f"[Stream] Error fetching stream info: {e}")
         return None
 
+    print(f"[DEBUG stream_management] /streams status={resp.status_code}")
+    if resp.status_code != 200:
+        print(f"[DEBUG stream_management] /streams error body={resp.text[:500]}")
+        log.error(f"[Stream] Failed to get stream info: {resp.status_code} - {resp.text}")
+        return None
 
-def update_stream_title(new_title: str) -> bool:
-    """
-    Update the stream title
-    
-    Args:
-        new_title: New stream title (max 140 characters)
-    
-    Returns:
-        True if successful
-    """
-    token = get_access_token()
-    broadcaster_id = get_broadcaster_id()
-    
-    if not token or not broadcaster_id:
-        return False
-    
-    # Truncate title if too long
-    if len(new_title) > 140:
-        new_title = new_title[:137] + "..."
-    
-    try:
-        headers = {
-            "Client-ID": TWITCH_CLIENT_ID,
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
-        }
-        
-        response = requests.patch(
-            f"{TWITCH_API_BASE}/channels",
-            headers=headers,
-            params={"broadcaster_id": broadcaster_id},
-            json={"title": new_title}
-        )
-        
-        if response.status_code == 204:
-            print(f"[Stream] Updated title to: {new_title}")
-            return True
-        
-        print(f"[Stream] Failed to update title: {response.status_code}")
-        return False
-        
-    except Exception as e:
-        print(f"[Stream] Error updating title: {e}")
-        return False
-
-
-def update_stream_category(game_name: str) -> bool:
-    """
-    Update the stream category/game
-    
-    Args:
-        game_name: Name of the game/category
-    
-    Returns:
-        True if successful
-    """
-    token = get_access_token()
-    broadcaster_id = get_broadcaster_id()
-    
-    if not token or not broadcaster_id:
-        return False
-    
-    # First, get the game ID
-    game_id = search_game(game_name)
-    if not game_id:
-        print(f"[Stream] Game not found: {game_name}")
-        return False
-    
-    try:
-        headers = {
-            "Client-ID": TWITCH_CLIENT_ID,
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
-        }
-        
-        response = requests.patch(
-            f"{TWITCH_API_BASE}/channels",
-            headers=headers,
-            params={"broadcaster_id": broadcaster_id},
-            json={"game_id": game_id}
-        )
-        
-        if response.status_code == 204:
-            print(f"[Stream] Updated category to: {game_name}")
-            return True
-        
-        print(f"[Stream] Failed to update category: {response.status_code}")
-        return False
-        
-    except Exception as e:
-        print(f"[Stream] Error updating category: {e}")
-        return False
+    items = resp.json().get("data", [])
+    print(f"[DEBUG stream_management] /streams returned {len(items)} records")
+    return items[0] if items else None
 
 
 def search_game(game_name: str) -> Optional[str]:
-    """
-    Search for a game by name and return its ID
-    
-    Args:
-        game_name: Name of the game to search
-    
-    Returns:
-        Game ID or None
-    """
-    token = get_access_token()
+    """Search game/category by name and return its game_id."""
+    print(f"[DEBUG stream_management] search_game() called with game_name={game_name!r}")
+    token = _ensure_app_token()
+    print(f"[DEBUG stream_management] search_game() token_set={bool(token)}")
     if not token:
         return None
-    
+
+    headers = _app_headers(token)
+    params = {"query": game_name, "first": 1}
+    print(f"[DEBUG stream_management] Requesting /search/categories query={game_name!r}")
+
     try:
-        headers = {
-            "Client-ID": TWITCH_CLIENT_ID,
-            "Authorization": f"Bearer {token}"
-        }
-        
-        response = requests.get(
-            f"{TWITCH_API_BASE}/games",
-            headers=headers,
-            params={"name": game_name}
-        )
-        
-        if response.status_code == 200:
-            data = response.json()
-            if data["data"]:
-                return data["data"][0]["id"]
-        
-        return None
-        
-    except Exception as e:
-        print(f"[Stream] Error searching game: {e}")
+        resp = requests.get(f"{TWITCH_API_BASE}/search/categories", headers=headers, params=params, timeout=15)
+    except Exception as e:  # pragma: no cover
+        print(f"[DEBUG stream_management] Exception searching game: {e}")
+        log.error(f"[Stream] Error searching game: {e}")
         return None
 
+    print(f"[DEBUG stream_management] /search/categories status={resp.status_code}")
+    if resp.status_code != 200:
+        print(f"[DEBUG stream_management] /search/categories error body={resp.text[:500]}")
+        log.error(f"[Stream] Failed to search game: {resp.status_code} - {resp.text}")
+        return None
 
-def get_top_games(limit: int = 10) -> List[Dict]:
-    """Get list of top games on Twitch"""
-    token = get_access_token()
+    data = resp.json().get("data", [])
+    print(f"[DEBUG stream_management] /search/categories returned {len(data)} records")
+    if not data:
+        return None
+
+    game_id = data[0]["id"]
+    print(f"[DEBUG stream_management] search_game() resolved game_id={game_id}")
+    return game_id
+
+
+def get_top_games(limit: int = 5) -> Optional[list[Dict[str, Any]]]:
+    """Optional helper: /games/top"""
+    print(f"[DEBUG stream_management] get_top_games() called limit={limit}")
+    token = _ensure_app_token()
+    print(f"[DEBUG stream_management] get_top_games() token_set={bool(token)}")
     if not token:
-        return []
-    
+        return None
+
+    headers = _app_headers(token)
+    params = {"first": limit}
+    print(f"[DEBUG stream_management] Requesting /games/top first={limit}")
+
     try:
-        headers = {
-            "Client-ID": TWITCH_CLIENT_ID,
-            "Authorization": f"Bearer {token}"
-        }
-        
-        response = requests.get(
-            f"{TWITCH_API_BASE}/games/top",
+        resp = requests.get(f"{TWITCH_API_BASE}/games/top", headers=headers, params=params, timeout=15)
+    except Exception as e:  # pragma: no cover
+        print(f"[DEBUG stream_management] Exception fetching top games: {e}")
+        log.error(f"[Stream] Error fetching top games: {e}")
+        return None
+
+    print(f"[DEBUG stream_management] /games/top status={resp.status_code}")
+    if resp.status_code != 200:
+        print(f"[DEBUG stream_management] /games/top error body={resp.text[:500]}")
+        log.error(f"[Stream] Failed to get top games: {resp.status_code} - {resp.text}")
+        return None
+
+    data = resp.json().get("data", [])
+    print(f"[DEBUG stream_management] /games/top returned {len(data)} records")
+    return data
+
+
+# --- MUTATING OPERATIONS (TITLE / CATEGORY) ---------------------------------
+
+def update_stream_title(new_title: str) -> bool:
+    """
+    Update stream title using BROADCASTER TOKEN.
+
+    This mirrors your direct test:
+      Client-ID: DEVILMEDLAR_TWITCH_CLIENT_ID
+      Authorization: Bearer DEVILMEDLAR_TWITCH_TOKEN (no 'oauth:')
+    """
+    print(f"[DEBUG stream_management] update_stream_title() called new_title={new_title!r}")
+    bid = get_broadcaster_id()
+    print(f"[DEBUG stream_management] update_stream_title() broadcaster_id={bid}")
+    if not bid:
+        log.error("[Stream] Cannot update title: missing broadcaster id")
+        return False
+
+    headers = _broadcaster_headers()
+    print(f"[DEBUG stream_management] update_stream_title() headers_set={bool(headers)}")
+    if not headers:
+        log.error("[Stream] Cannot update title: broadcaster headers missing")
+        return False
+
+    params = {"broadcaster_id": bid}
+    json_body = {"title": new_title}
+    print(f"[DEBUG stream_management] PATCH /channels (title) params={params} body={json_body}")
+
+    try:
+        resp = requests.patch(
+            f"{TWITCH_API_BASE}/channels",
             headers=headers,
-            params={"first": limit}
+            params=params,
+            json=json_body,
+            timeout=15,
         )
-        
-        if response.status_code == 200:
-            data = response.json()
-            return [
-                {
-                    "name": game["name"],
-                    "id": game["id"]
-                }
-                for game in data["data"]
-            ]
-        
-        return []
-        
-    except Exception as e:
-        print(f"[Stream] Error getting top games: {e}")
-        return []
+    except Exception as e:  # pragma: no cover
+        print(f"[DEBUG stream_management] Exception updating title: {e}")
+        log.error(f"[Stream] Error updating title: {e}")
+        return False
+
+    print(f"[DEBUG stream_management] update_stream_title() status={resp.status_code}")
+    if resp.status_code in (204, 200):
+        log.info("[Stream] ✅ Title updated to: %s", new_title)
+        print("[DEBUG stream_management] update_stream_title() SUCCESS")
+        return True
+
+    print(f"[DEBUG stream_management] update_stream_title() error body={resp.text[:500]}")
+    log.error(f"[Stream] ❌ Failed to update title: {resp.status_code} - {resp.text}")
+    return False
 
 
-def format_stream_info(info: Dict) -> str:
-    """Format stream info for chat display"""
+def update_stream_category(game_name: str) -> bool:
+    """Update stream category/game by name."""
+    print(f"[DEBUG stream_management] update_stream_category() called game_name={game_name!r}")
+    bid = get_broadcaster_id()
+    print(f"[DEBUG stream_management] update_stream_category() broadcaster_id={bid}")
+    if not bid:
+        log.error("[Stream] Cannot update category: missing broadcaster id")
+        return False
+
+    game_id = search_game(game_name)
+    print(f"[DEBUG stream_management] update_stream_category() game_id={game_id}")
+    if not game_id:
+        log.error("[Stream] Could not find game/category: %s", game_name)
+        return False
+
+    headers = _broadcaster_headers()
+    print(f"[DEBUG stream_management] update_stream_category() headers_set={bool(headers)}")
+    if not headers:
+        log.error("[Stream] Cannot update category: broadcaster headers missing")
+        return False
+
+    params = {"broadcaster_id": bid}
+    json_body = {"game_id": game_id}
+    print(f"[DEBUG stream_management] PATCH /channels (category) params={params} body={json_body}")
+
+    try:
+        resp = requests.patch(
+            f"{TWITCH_API_BASE}/channels",
+            headers=headers,
+            params=params,
+            json=json_body,
+            timeout=15,
+        )
+    except Exception as e:  # pragma: no cover
+        print(f"[DEBUG stream_management] Exception updating category: {e}")
+        log.error(f"[Stream] Error updating category: {e}")
+        return False
+
+    print(f"[DEBUG stream_management] update_stream_category() status={resp.status_code}")
+    if resp.status_code in (204, 200):
+        log.info("[Stream] ✅ Category updated to: %s", game_name)
+        print("[DEBUG stream_management] update_stream_category() SUCCESS")
+        return True
+
+    print(f"[DEBUG stream_management] update_stream_category() error body={resp.text[:500]}")
+    log.error(f"[Stream] ❌ Failed to update category: {resp.status_code} - {resp.text}")
+    return False
+
+
+# --- FORMATTING & VALIDATION HELPERS ----------------------------------------
+
+def format_stream_info(info: Optional[Dict[str, Any]]) -> str:
+    """Nicely format stream/channel info for chat."""
+    print(f"[DEBUG stream_management] format_stream_info() called info_is_none={info is None}")
     if not info:
         return "Could not retrieve stream info."
-    
-    if not info.get("is_live", False):
-        # Show channel info even when offline
-        channel = get_channel_info()
-        if channel:
-            return f"📺 Stream is OFFLINE | Title: {channel['title']} | Category: {channel['game_name']}"
-        return "📺 Stream is currently offline."
-    
-    title = info["title"]
-    game = info["game_name"]
-    viewers = info["viewer_count"]
-    
-    # Calculate uptime
-    started_at = datetime.fromisoformat(info["started_at"].replace("Z", "+00:00"))
-    uptime = datetime.now().astimezone() - started_at
-    hours = int(uptime.total_seconds() // 3600)
-    minutes = int((uptime.total_seconds() % 3600) // 60)
-    
-    return f"🔴 LIVE | {title} | {game} | 👥 {viewers} viewers | ⏱️ {hours}h {minutes}m"
+
+    title = info.get("title") or info.get("game_name", "Unknown")
+    game = info.get("game_name", "Unknown")
+    lang = info.get("broadcaster_language", "??").upper()
+
+    formatted = f"📺 Title: {title} | 🎮 Game: {game} | 🌐 Lang: {lang}"
+    print(f"[DEBUG stream_management] format_stream_info() -> {formatted!r}")
+    return formatted
 
 
-# Example usage and testing
-if __name__ == "__main__":
-    print("=" * 60)
-    print("MedlarTV Stream Management - Testing")
-    print("=" * 60)
-    
-    print("\n--- Getting Access Token ---")
-    token = get_access_token()
-    print(f"Token: {token[:20] if token else 'None'}...")
-    
-    print("\n--- Getting Broadcaster ID ---")
-    broadcaster_id = get_broadcaster_id()
-    print(f"Broadcaster ID: {broadcaster_id}")
-    
-    print("\n--- Getting Stream Info ---")
-    stream_info = get_stream_info()
-    if stream_info:
-        print(format_stream_info(stream_info))
+def verify_twitch_tokens() -> bool:
+    """
+    Called at startup: make sure broadcaster token is valid and has the right scopes,
+    and that we can resolve broadcaster id with APP credentials.
+    """
+    print("[DEBUG stream_management] verify_twitch_tokens() called")
+    ok = True
+
+    if not BROADCASTER_TOKEN:
+        print("[DEBUG stream_management] BROADCASTER_TOKEN missing")
+        log.error("[Stream] Broadcaster token is missing")
+        return False
+
+    # Validate broadcaster token with Twitch
+    try:
+        headers = {"Authorization": f"OAuth {BROADCASTER_TOKEN}"}
+        print(f"[DEBUG stream_management] Validating broadcaster token at {TWITCH_AUTH_BASE}/validate")
+        resp = requests.get(f"{TWITCH_AUTH_BASE}/validate", headers=headers, timeout=15)
+    except Exception as e:  # pragma: no cover
+        print(f"[DEBUG stream_management] Exception validating broadcaster token: {e}")
+        log.error(f"[Stream] Error validating broadcaster token: {e}")
+        return False
+
+    print(f"[DEBUG stream_management] /validate status={resp.status_code}")
+    if resp.status_code != 200:
+        print(f"[DEBUG stream_management] /validate error body={resp.text[:500]}")
+        log.error(f"[Stream] Broadcaster token validation failed: {resp.status_code} - {resp.text}")
+        ok = False
     else:
-        print("No stream info available")
-    
-    print("\n--- Getting Channel Info ---")
-    channel_info = get_channel_info()
-    if channel_info:
-        print(f"Channel: {channel_info['broadcaster_name']}")
-        print(f"Title: {channel_info['title']}")
-        print(f"Game: {channel_info['game_name']}")
-    
-    print("\n--- Searching for Games ---")
-    test_games = ["Minecraft", "Just Chatting", "League of Legends"]
-    for game in test_games:
-        game_id = search_game(game)
-        print(f"{game}: {game_id}")
-    
-    print("\n--- Top Games ---")
-    top_games = get_top_games(5)
-    for i, game in enumerate(top_games, 1):
-        print(f"{i}. {game['name']}")
+        data = resp.json()
+        scopes = data.get("scopes", [])
+        print(f"[DEBUG stream_management] /validate scopes={scopes}")
+        if "channel:manage:broadcast" not in scopes:
+            print("[DEBUG stream_management] Missing 'channel:manage:broadcast' scope")
+            log.error("[Stream] Broadcaster token is missing 'channel:manage:broadcast' scope")
+            ok = False
+
+    # Ensure we can fetch broadcaster id using APP token
+    bid = get_broadcaster_id()
+    print(f"[DEBUG stream_management] verify_twitch_tokens() broadcaster_id={bid}")
+    if not bid:
+        ok = False
+
+    if ok:
+        log.info("[Stream] ✅ Twitch tokens verified")
+        print("[DEBUG stream_management] verify_twitch_tokens() -> True")
+    else:
+        log.error("[Stream] ❌ Twitch token verification FAILED")
+        print("[DEBUG stream_management] verify_twitch_tokens() -> False")
+
+    return ok

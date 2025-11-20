@@ -1,6 +1,8 @@
+print("[DEBUG interaction_logger] Loaded interaction_logger.py")
+
 """
 MedlarTV Interaction Logger
-Logs all chat interactions for analytics and learning
+Logs chat interactions, commands, mood changes, and errors for analytics.
 """
 
 import os
@@ -9,282 +11,205 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, Any
 
-# Check if logging is enabled
+# Configuration
 ENABLE_LOGGING = os.getenv("ENABLE_INTERACTION_LOGGING", "true").lower() == "true"
 LOG_DIRECTORY = os.getenv("LOG_DIRECTORY", "logs")
 
+def _now_iso() -> str:
+    """Return current UTC time in ISO format."""
+    ts = datetime.utcnow().isoformat() + "Z"
+    print(f"[DEBUG interaction_logger] _now_iso() → {ts}")
+    return ts
 
-def ensure_log_directory():
-    """Create logs directory if it doesn't exist"""
+def ensure_log_directory() -> Path:
+    """
+    Ensure the log directory exists and return it as a Path object.
+    """
     log_path = Path(LOG_DIRECTORY)
+    print(f"[DEBUG interaction_logger] ensure_log_directory() using path={log_path}")
     log_path.mkdir(parents=True, exist_ok=True)
+    print(f"[DEBUG interaction_logger] Directory ensured: {log_path.exists()}")
     return log_path
 
+def _append_jsonl(filename: str, entry: Dict[str, Any]) -> None:
+    print(f"[DEBUG interaction_logger] _append_jsonl() called for file={filename}")
+    """
+    Append a single JSON object as a line to a .jsonl log file.
+    """
+    if not ENABLE_LOGGING:
+        return
+
+    try:
+        log_path = ensure_log_directory()
+        print(f"[DEBUG interaction_logger] Logging path resolved → {log_path}")
+        log_file = log_path / filename
+
+        print(f"[DEBUG interaction_logger] Writing entry to {log_file}")
+        print(f"[DEBUG interaction_logger] Entry data: {entry}")
+
+        with log_file.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+    except Exception as e:
+        print(f"[DEBUG interaction_logger] ERROR inside _append_jsonl: {e}")
+        print(f"[Logger] Failed to write to {filename}: {e}")
+
+# ---------------------------------------------------------------------------
+# PUBLIC LOGGING APIS
+# ---------------------------------------------------------------------------
 
 def log_interaction(
-    username: str,
+    user: str,
     message: str,
-    response: str,
-    mood: str = "unknown",
-    language: str = "en",
-    metadata: Optional[Dict[str, Any]] = None
-):
+    response: Optional[str] = None,
+    mood: Optional[str] = None,
+    context: Optional[Dict[str, Any]] = None,
+) -> None:
+    print(f"[DEBUG interaction_logger] log_interaction() user={user} message={message} mood={mood}")
     """
-    Log a chat interaction to JSONL file for analytics.
-    
-    Args:
-        username: User who sent the message
-        message: User's message
-        response: Bot's response
-        mood: Current bot mood
-        language: Detected language
-        metadata: Additional metadata (optional)
-    """
-    if not ENABLE_LOGGING:
-        return
-    
-    try:
-        log_path = ensure_log_directory()
-        log_file = log_path / "interactions.jsonl"
-        
-        # Create log entry
-        log_entry = {
-            "timestamp": datetime.now().isoformat(),
-            "user": username,
-            "message": message,
-            "response": response,
-            "mood": mood,
-            "language": language
-        }
-        
-        # Add metadata if provided
-        if metadata:
-            log_entry["metadata"] = metadata
-        
-        # Append to JSONL file
-        with open(log_file, "a", encoding="utf-8") as f:
-            f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
-        
-        # Success log (optional, can be removed for performance)
-        # print(f"[Logger] Logged interaction: {username}")
-        
-    except Exception as e:
-        print(f"[Logger] Error logging interaction: {e}")
-
-def log_command(username: str, command: str, success: bool = True):
-    """
-    Log a command usage event with success status.
-    Compatible with MedlarTV Twitch command system.
+    Log a basic chat interaction between a user and MedlarTV.
     """
     if not ENABLE_LOGGING:
         return
 
-    try:
-        log_path = ensure_log_directory()
-        log_file = log_path / "commands.jsonl"
+    entry: Dict[str, Any] = {
+        "ts": _now_iso(),
+        "type": "interaction",
+        "user": user,
+        "message": message,
+        "response": response,
+        "mood": mood,
+    }
+    if context:
+        entry["context"] = context
 
-        log_entry = {
-            "timestamp": datetime.now().isoformat(),
-            "user": username,
-            "command": command,
-            "success": success
-        }
+    print(f"[DEBUG interaction_logger] log_interaction() entry={entry}")
+    _append_jsonl("interactions.jsonl", entry)
 
-        # Optional: pretty human-readable backup line
-        readable = f"[{log_entry['timestamp']}] {username} → {command} {'✅' if success else '❌'}\n"
-
-        # Append both JSON and readable form
-        with open(log_file, "a", encoding="utf-8") as f:
-            f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
-
-        # Also log to a quick human-readable summary
-        summary_file = log_path / "commands.log"
-        with open(summary_file, "a", encoding="utf-8") as f:
-            f.write(readable)
-
-    except Exception as e:
-        print(f"[Logger] Error logging command: {e}")
-
-def log_mood_change(old_mood: str, new_mood: str, trigger: str = "auto"):
-    """Log mood changes"""
+def log_command(
+    user: str,
+    command: str,
+    args: Optional[Dict[str, Any]] = None,
+    success: bool = True,
+    error: Optional[str] = None,
+) -> None:
+    print(f"[DEBUG interaction_logger] log_command() user={user} command={command} success={success}")
+    """
+    Log a command invocation (e.g., !title, !so).
+    """
     if not ENABLE_LOGGING:
         return
-    
-    try:
-        log_path = ensure_log_directory()
-        log_file = log_path / "moods.jsonl"
-        
-        log_entry = {
-            "timestamp": datetime.now().isoformat(),
-            "old_mood": old_mood,
-            "new_mood": new_mood,
-            "trigger": trigger
-        }
-        
-        with open(log_file, "a", encoding="utf-8") as f:
-            f.write(json.dumps(log_entry) + "\n")
-        
-    except Exception as e:
-        print(f"[Logger] Error logging mood change: {e}")
 
+    entry: Dict[str, Any] = {
+        "ts": _now_iso(),
+        "type": "command",
+        "user": user,
+        "command": command,
+        "success": success,
+    }
+    if args:
+        entry["args"] = args
+    if error:
+        entry["error"] = error
 
-def log_error(error_type: str, error_message: str, context: Optional[Dict] = None):
-    """Log errors for debugging"""
+    print(f"[DEBUG interaction_logger] log_command() entry={entry}")
+    _append_jsonl("commands.jsonl", entry)
+
+def log_mood_change(
+    old_mood: str,
+    new_mood: str,
+    reason: str,
+    extra: Optional[Dict[str, Any]] = None,
+) -> None:
+    print(f"[DEBUG interaction_logger] log_mood_change() {old_mood} → {new_mood}, reason={reason}")
+    """
+    Log when the emotional system changes dominant mood.
+    """
     if not ENABLE_LOGGING:
         return
-    
+
+    entry: Dict[str, Any] = {
+        "ts": _now_iso(),
+        "type": "mood_change",
+        "from": old_mood,
+        "to": new_mood,
+        "reason": reason,
+    }
+    if extra:
+        entry["extra"] = extra
+
+    print(f"[DEBUG interaction_logger] log_mood_change() entry={entry}")
+    _append_jsonl("mood_changes.jsonl", entry)
+
+def log_error(
+    error_type: str,
+    error_message: str,
+    context: Optional[Dict[str, Any]] = None,
+) -> None:
+    print(f"[DEBUG interaction_logger] log_error() type={error_type} msg={error_message}")
+    """
+    Log an internal error for debugging.
+    """
+    if not ENABLE_LOGGING:
+        return
+
+    entry: Dict[str, Any] = {
+        "ts": _now_iso(),
+        "type": "error",
+        "error_type": error_type,
+        "message": error_message,
+    }
+    if context:
+        entry["context"] = context
+
+    print(f"[DEBUG interaction_logger] log_error() entry={entry}")
+    _append_jsonl("errors.jsonl", entry)
+
+
+def get_interaction_stats() -> Dict[str, Any]:
+    print("[DEBUG interaction_logger] get_interaction_stats() called")
+    """
+    Basic stats summary based on log file counts.
+    """
+    stats = {
+        "interactions": 0,
+        "commands": 0,
+        "mood_changes": 0,
+        "errors": 0,
+    }
+
     try:
         log_path = ensure_log_directory()
-        log_file = log_path / "errors.jsonl"
-        
-        log_entry = {
-            "timestamp": datetime.now().isoformat(),
-            "error_type": error_type,
-            "error_message": error_message
+        files = {
+            "interactions.jsonl": "interactions",
+            "commands.jsonl": "commands",
+            "mood_changes.jsonl": "mood_changes",
+            "errors.jsonl": "errors",
         }
-        
-        if context:
-            log_entry["context"] = context
-        
-        with open(log_file, "a", encoding="utf-8") as f:
-            f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
-        
+
+        for filename, key in files.items():
+            fpath = log_path / filename
+            if fpath.exists():
+                print(f"[DEBUG interaction_logger] Counting lines in → {fpath}")
+                with fpath.open("r", encoding="utf-8") as f:
+                    stats[key] = sum(1 for _ in f)
+                print(f"[DEBUG interaction_logger] {key} count updated → {stats[key]}")
+
     except Exception as e:
-        print(f"[Logger] Error logging error (meta!): {e}")
+        print(f"[DEBUG interaction_logger] ERROR in get_interaction_stats: {e}")
+        print(f"[Logger] Failed to compute stats: {e}")
 
+    return stats
 
-def get_interaction_stats(days: int = 7) -> Dict[str, Any]:
-    """
-    Get statistics from interaction logs.
-    
-    Args:
-        days: Number of days to analyze (default: 7)
-    
-    Returns:
-        Dictionary with stats
-    """
-    try:
-        log_path = ensure_log_directory()
-        log_file = log_path / "interactions.jsonl"
-        
-        if not log_file.exists():
-            return {"error": "No interaction logs found"}
-        
-        # Read logs
-        interactions = []
-        with open(log_file, "r", encoding="utf-8") as f:
-            for line in f:
-                try:
-                    interactions.append(json.loads(line))
-                except json.JSONDecodeError:
-                    continue
-        
-        # Calculate stats
-        total_interactions = len(interactions)
-        unique_users = len(set(i["user"] for i in interactions))
-        
-        # Mood distribution
-        mood_counts = {}
-        for interaction in interactions:
-            mood = interaction.get("mood", "unknown")
-            mood_counts[mood] = mood_counts.get(mood, 0) + 1
-        
-        # Language distribution
-        language_counts = {}
-        for interaction in interactions:
-            lang = interaction.get("language", "en")
-            language_counts[lang] = language_counts.get(lang, 0) + 1
-        
-        # Top users
-        user_counts = {}
-        for interaction in interactions:
-            user = interaction["user"]
-            user_counts[user] = user_counts.get(user, 0) + 1
-        
-        top_users = sorted(user_counts.items(), key=lambda x: x[1], reverse=True)[:10]
-        
-        return {
-            "total_interactions": total_interactions,
-            "unique_users": unique_users,
-            "mood_distribution": mood_counts,
-            "language_distribution": language_counts,
-            "top_users": dict(top_users),
-            "period_days": days
-        }
-        
-    except Exception as e:
-        return {"error": str(e)}
+# ---------------------------------------------------------------------------
+# SELF-TEST
+# ---------------------------------------------------------------------------
 
-
-def clear_old_logs(days: int = 30):
-    """
-    Clear logs older than specified days (for storage management).
-    
-    Args:
-        days: Keep logs from last N days
-    """
-    try:
-        log_path = ensure_log_directory()
-        cutoff = datetime.now().timestamp() - (days * 24 * 60 * 60)
-        
-        for log_file in log_path.glob("*.jsonl"):
-            # Read and filter logs
-            filtered_logs = []
-            
-            with open(log_file, "r", encoding="utf-8") as f:
-                for line in f:
-                    try:
-                        entry = json.loads(line)
-                        timestamp = datetime.fromisoformat(entry["timestamp"]).timestamp()
-                        
-                        if timestamp >= cutoff:
-                            filtered_logs.append(line)
-                    except:
-                        continue
-            
-            # Write back filtered logs
-            with open(log_file, "w", encoding="utf-8") as f:
-                f.writelines(filtered_logs)
-        
-        print(f"[Logger] Cleared logs older than {days} days")
-        
-    except Exception as e:
-        print(f"[Logger] Error clearing old logs: {e}")
-
-
-# Example usage and testing
 if __name__ == "__main__":
-    print("=" * 60)
-    print("MedlarTV Interaction Logger - Testing")
-    print("=" * 60)
-    
-    print("\n--- Logging Test Interactions ---")
-    test_interactions = [
-        ("User1", "Hey MedlarTV!", "Hey User1! 👋", "chill", "en"),
-        ("User2", "Hola!", "Hola User2! 🇪🇸", "hype", "es"),
-        ("User3", "Let's go!", "LET'S GOOOO! 🔥", "hype", "en"),
-        ("User1", "Thanks!", "You're welcome! 💖", "supportive", "en"),
-    ]
-    
-    for username, message, response, mood, language in test_interactions:
-        log_interaction(username, message, response, mood, language)
-        print(f"✓ Logged: {username}: {message}")
-    
-    print("\n--- Logging Commands ---")
-    log_command("User1", "!ping", True)
-    log_command("User2", "!mood", True)
-    print("✓ Logged commands")
-    
-    print("\n--- Logging Mood Changes ---")
-    log_mood_change("chill", "hype", "keyword")
-    log_mood_change("hype", "supportive", "auto")
-    print("✓ Logged mood changes")
-    
-    print("\n--- Getting Stats ---")
-    stats = get_interaction_stats()
-    print(json.dumps(stats, indent=2))
-    
-    print("\n--- Log Files Created ---")
-    log_path = Path(LOG_DIRECTORY)
-    for log_file in log_path.glob("*.jsonl"):
-        print(f"  📄 {log_file.name}")
+    print("[Logger] Running self-test...")
+    log_interaction("test_user", "Hello Medlar!", "Hey there, pilot.", "hype")
+    log_command("test_user", "!title", {"title": "New Stream Title"}, success=True)
+    log_mood_change("chill", "hype", "test_reason")
+    log_error("test_error", "Something went wrong", {"foo": "bar"})
+    print(json.dumps(get_interaction_stats(), indent=2))
+    print("[Logger] Self-test complete.")

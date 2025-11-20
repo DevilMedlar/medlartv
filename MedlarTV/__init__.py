@@ -1,3 +1,5 @@
+#C:\Users\znorr\medlartv\MedlarTV
+
 """
 MedlarTV - Tactical AI Companion for Twitch
 A mood-aware, personality-driven AI assistant with local LLM integration.

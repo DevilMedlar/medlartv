@@ -1,3 +1,5 @@
+print("[DEBUG sentiment_advanced] Loaded sentiment_advanced.py")
+
 """
 MedlarTV Enhanced Sentiment Analysis
 Works with the advanced emotional system
@@ -53,122 +55,119 @@ EMOJI_SENTIMENT = {
 
 
 def analyze_sentiment_advanced(message: str) -> Tuple[float, Dict[str, float]]:
-    """
-    Advanced sentiment analysis with emotion detection
-    
-    Args:
-        message: Chat message to analyze
-    
-    Returns:
-        Tuple of (overall_sentiment, emotion_scores)
-        - overall_sentiment: -1.0 (very negative) to 1.0 (very positive)
-        - emotion_scores: Dict of detected emotions and their strengths
-    """
+    print(f"[DEBUG sentiment_advanced] analyze_sentiment_advanced() called message={message!r}")
+
     text = message.lower()
+    print(f"[DEBUG sentiment_advanced] normalized_text={text!r}")
+
     words = re.findall(r'\b\w+\b', text)
-    
-    # --- Overall Sentiment Score ---
+    print(f"[DEBUG sentiment_advanced] tokenized_words={words}")
+
     score = 0.0
     word_count = 0
-    
-    # Check for negations
+
     negated = False
+
     for i, word in enumerate(words):
-        # Check if word is negated
-        if i > 0 and words[i-1] in NEGATIONS:
+        print(f"[DEBUG sentiment_advanced] scanning_word index={i} word={word!r}")
+
+        if i > 0 and words[i - 1] in NEGATIONS:
             negated = True
+            print(f"[DEBUG sentiment_advanced] word_is_negated=True (previous_word={words[i-1]!r})")
         else:
             negated = False
-        
-        # Positive words
+
         if word in POSITIVE_WORDS:
+            print(f"[DEBUG sentiment_advanced] POSITIVE match negated={negated}")
             word_count += 1
             score += -1 if negated else 1
-        
-        # Negative words
+
         elif word in NEGATIVE_WORDS:
+            print(f"[DEBUG sentiment_advanced] NEGATIVE match negated={negated}")
             word_count += 1
-            score += 1 if negated else -1  # Negated negative = positive
-        
-        # Intensifiers multiply nearby sentiment
+            score += 1 if negated else -1
+
         elif word in INTENSIFIERS and i < len(words) - 1:
             next_word = words[i + 1]
+            print(f"[DEBUG sentiment_advanced] INTENSIFIER match next_word={next_word!r}")
             if next_word in POSITIVE_WORDS:
                 score += 0.5
             elif next_word in NEGATIVE_WORDS:
                 score -= 0.5
-    
-    # Check for emojis
+
     emoji_score = 0.0
     emoji_count = 0
+
     for emoji, value in EMOJI_SENTIMENT.items():
         if emoji in message:
+            print(f"[DEBUG sentiment_advanced] emoji_detected emoji={emoji!r} value={value}")
             emoji_score += value
             emoji_count += 1
-    
-    # Combine word and emoji sentiment
+
+    print(f"[DEBUG sentiment_advanced] score_words={score} count_words={word_count}")
+    print(f"[DEBUG sentiment_advanced] emoji_score={emoji_score} emoji_count={emoji_count}")
+
     total_count = word_count + emoji_count
     if total_count > 0:
         combined_score = (score + emoji_score) / total_count
     else:
         combined_score = 0.0
-    
-    # Clamp between -1 and 1
+
     overall_sentiment = max(-1.0, min(1.0, combined_score))
-    
-    # --- Emotion Detection ---
+
+    print(f"[DEBUG sentiment_advanced] overall_sentiment={overall_sentiment}")
+
     emotion_scores = {}
-    
+
     for emotion, emotion_keywords in EMOTION_WORDS.items():
         matches = sum(1 for keyword in emotion_keywords if keyword in text)
         if matches > 0:
-            # Emotion strength based on keyword frequency and overall sentiment
+            print(f"[DEBUG sentiment_advanced] emotion_detected={emotion} matches={matches}")
             strength = min(matches * 0.15, 0.5)
-            
-            # Adjust by overall sentiment
+
             if emotion in ["happiness", "excitement", "gratitude", "pride"]:
                 if overall_sentiment > 0:
                     strength *= (1 + overall_sentiment * 0.5)
+
             elif emotion in ["sadness", "anger", "fear"]:
                 if overall_sentiment < 0:
                     strength *= (1 + abs(overall_sentiment) * 0.5)
-            
-            emotion_scores[emotion] = min(strength, 1.0)
-    
+
+            strength = min(strength, 1.0)
+            emotion_scores[emotion] = strength
+
+            print(f"[DEBUG sentiment_advanced] emotion_strength[{emotion}]={strength}")
+
+    print(f"[DEBUG sentiment_advanced] final_emotion_scores={emotion_scores}")
+
     return overall_sentiment, emotion_scores
 
 
 def analyze_sentiment_simple(message: str) -> float:
-    """
-    Simple sentiment analysis (backward compatible)
-    
-    Returns:
-        Sentiment score from -1.0 to 1.0
-    """
+    print(f"[DEBUG sentiment_advanced] analyze_sentiment_simple() called")
     sentiment, _ = analyze_sentiment_advanced(message)
+    print(f"[DEBUG sentiment_advanced] simple_sentiment={sentiment}")
     return sentiment
 
 
 def detect_emotional_keywords(message: str) -> Dict[str, int]:
-    """
-    Detect which emotions are mentioned in a message
-    
-    Returns:
-        Dict of emotions and how many keywords matched
-    """
+    print(f"[DEBUG sentiment_advanced] detect_emotional_keywords() message={message!r}")
+
     text = message.lower()
     detected = {}
-    
+
     for emotion, keywords in EMOTION_WORDS.items():
         matches = sum(1 for keyword in keywords if keyword in text)
         if matches > 0:
             detected[emotion] = matches
-    
+            print(f"[DEBUG sentiment_advanced] keyword_detected emotion={emotion} matches={matches}")
+
     return detected
 
 
 def get_sentiment_description(sentiment: float) -> str:
-    """Get a text description of sentiment score"""
+    print(f"[DEBUG sentiment_advanced] get_sentiment_description() sentiment={sentiment}")
+
     if sentiment >= 0.7:
         return "very positive"
     elif sentiment >= 0.3:
@@ -179,30 +178,3 @@ def get_sentiment_description(sentiment: float) -> str:
         return "negative"
     else:
         return "very negative"
-
-
-# --- Example usage ---
-if __name__ == "__main__":
-    print("=" * 60)
-    print("Enhanced Sentiment Analysis - Demo")
-    print("=" * 60)
-    
-    test_messages = [
-        "OMG this is absolutely amazing! I love it! 🔥",
-        "I'm so sad and lonely right now 😢",
-        "This is frustrating and annoying ugh",
-        "Thanks so much! You're the best! ❤️",
-        "Not bad, actually pretty good!",
-        "I'm excited but also nervous 😰",
-        "This sucks, I hate it",
-        "Just chilling, nothing special",
-    ]
-    
-    for msg in test_messages:
-        sentiment, emotions = analyze_sentiment_advanced(msg)
-        print(f"\nMessage: '{msg}'")
-        print(f"Sentiment: {sentiment:.2f} ({get_sentiment_description(sentiment)})")
-        if emotions:
-            print(f"Emotions: {emotions}")
-        else:
-            print("Emotions: None detected")

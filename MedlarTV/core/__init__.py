@@ -22,9 +22,8 @@ from .llm_brain import (
 
 # Context Tracking & Expression (from mood_system)
 from .mood_system import (
-    record_session_mood,
-    get_contextual_mix,
-    blended_phrase
+    compute_mood,
+    get_mood_label
 )
 
 # Sentiment Analysis (using sentiment_advanced as replacement for deleted sentiment.py)
@@ -42,17 +41,6 @@ from .translation import (
     detect_language,
     get_multilingual_greeting,
     add_language_indicator,
-)
-
-# Response Templates Module
-from .response_templates import (
-    get_template,
-    get_greeting,
-    get_agreement,
-    get_hype,
-    get_support,
-    get_sarcastic,
-    get_smart_response
 )
 
 # Interaction Logger Module
@@ -155,26 +143,16 @@ __all__ = [
     'clear_history',
     
     # Context functions
-    'record_session_mood',
-    'get_contextual_mix',
+    'compute_mood',
+    'get_mood_label',
     
     # Expression & Sentiment (Legacy)
-    'blended_phrase',
     'analyze_sentiment',
     
     # Fuzzy Trigger Detection
     'fuzzy_should_respond',
     'find_triggers_in_message',
     'is_trigger_word',
-    
-    # Response Templates
-    'get_template',
-    'get_greeting',
-    'get_agreement',
-    'get_hype',
-    'get_support',
-    'get_sarcastic',
-    'get_smart_response',
     
     # Interaction Logging
     'log_interaction',

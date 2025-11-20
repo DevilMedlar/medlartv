@@ -1,3 +1,21 @@
 copilots:
   active: []
-  history: []
+  history:
+  - action: add
+    ts: 1763617586.8844376
+    user: TestCopilot
+  - action: remove
+    ts: 1763617586.9019701
+    user: TestCopilot
+  - action: add
+    ts: 1763619653.4503655
+    user: friend
+  - action: remove
+    ts: 1763619653.4663808
+    user: friend
+  - action: add
+    ts: 1763619768.645322
+    user: friend
+  - action: remove
+    ts: 1763619768.6643293
+    user: friend

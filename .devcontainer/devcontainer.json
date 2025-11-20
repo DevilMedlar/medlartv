@@ -24,8 +24,10 @@
 
   "remoteUser": "vscode",
 
+  "workspaceFolder": "/workspaces/medlartv",
+
   "mounts": [
-    "source=${localWorkspaceFolder}/MedlarTV,target=/workspaces/medlartv,type=bind"
+    "source=${localWorkspaceFolder},target=/workspaces/medlartv,type=bind"
   ],
 
   "forwardPorts": [8000, 8765],
@@ -34,14 +36,7 @@
     "8765": { "label": "Avatar Bridge" }
   },
 
-  "env": {
-    "CORE_URL": "http://127.0.0.1:8000",
-    "TWITCH_CHANNEL": "#devilmedlar",
-    "TWITCH_NICK": "medlartv",
-    "TWITCH_TOKEN": "oauth:n653y897jfaabudu5bph200ztacotq",
-    "TWITCH_CLIENT_ID": "87h2456qgm66fgfbe0wveg7n43r1rb",
-    "TWITCH_CLIENT_SECRET": "7v5af6s0p0g9j8qr0tyjznnwgag85f",
-    "TWITCH_ACCESS_TOKEN": "n653y897jfaabudu5bph200ztacotq",
-    "TWITCH_REFRESH_TOKEN": "0sn553nitavk6un09xn3le1vgua6y3g1qifinl729rkr0aatl7"
-  }
+  "envFile": [
+    "../.env"
+  ]
 }

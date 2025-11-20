@@ -5,6 +5,10 @@ Automatically chooses emotes based on current emotional state
 
 import random
 from typing import List, Optional
+import logging
+log = logging.getLogger("emotion_emotes")
+log.setLevel(logging.DEBUG)
+log.debug("[DEBUG] emotion_emote_selector loaded")
 
 # Emotion-to-Emote mapping
 EMOTION_EMOTE_MAP = {
@@ -91,6 +95,8 @@ DEFAULT_EMOTES = {
 
 
 def get_emotion_emote(emotion: str, emote_type: str = "twitch", available_emotes: Optional[List[str]] = None) -> str:
+    log.debug(f"[EMOTE] get_emotion_emote(emotion='{emotion}', type='{emote_type}')")
+
     """
     Get an appropriate emote for the given emotion.
     
@@ -98,7 +104,7 @@ def get_emotion_emote(emotion: str, emote_type: str = "twitch", available_emotes
         emotion: Current emotional state (e.g., "happiness", "excitement")
         emote_type: "twitch" for Twitch emotes, "unicode" for emoji
         available_emotes: List of emotes available in the channel (optional)
-    
+
     Returns:
         A single emote string
     """
@@ -115,7 +121,8 @@ def get_emotion_emote(emotion: str, emote_type: str = "twitch", available_emotes
         # If no emotes available from pool, use any available custom emote
         if not emote_pool and available_emotes:
             emote_pool = available_emotes
-    
+
+    log.debug(f"[EMOTE] Selected emote='{emote}' from pool={emote_pool}")    
     # Return random emote from pool
     if emote_pool:
         return random.choice(emote_pool)
@@ -126,6 +133,8 @@ def get_emotion_emote(emotion: str, emote_type: str = "twitch", available_emotes
 
 def add_emotion_emote(message: str, emotion: str, available_emotes: Optional[List[str]] = None, 
                       use_unicode: bool = False) -> str:
+    log.debug(f"[ADD_EMOTE] Adding emotion '{emotion}' to message '{message}'")
+
     """
     Add an emotion-appropriate emote to a message.
     
@@ -145,6 +154,8 @@ def add_emotion_emote(message: str, emotion: str, available_emotes: Optional[Lis
 
 def get_multiple_emotion_emotes(emotions: dict, count: int = 2, emote_type: str = "twitch",
                                 available_emotes: Optional[List[str]] = None) -> List[str]:
+    log.debug(f"[MULTI] Building multi-emote for emotions={emotions} count={count}")
+
     """
     Get multiple emotes representing a complex emotional state.
     
@@ -153,7 +164,7 @@ def get_multiple_emotion_emotes(emotions: dict, count: int = 2, emote_type: str 
         count: Number of emotes to return
         emote_type: "twitch" or "unicode"
         available_emotes: List of available Twitch emotes
-    
+
     Returns:
         List of emote strings
     """
@@ -163,6 +174,7 @@ def get_multiple_emotion_emotes(emotions: dict, count: int = 2, emote_type: str 
     # Get emotes for top emotions
     selected_emotes = []
     for emotion, value in sorted_emotions[:count]:
+        log.debug(f"[MULTI] Loop: considering emotion='{emotion}', value={value}")
         if value > 0.3:  # Only include emotions above 30%
             emote = get_emotion_emote(emotion, emote_type, available_emotes)
             if emote not in selected_emotes:  # Avoid duplicates
@@ -175,13 +187,16 @@ def get_multiple_emotion_emotes(emotions: dict, count: int = 2, emote_type: str 
             selected_emotes.append(fallback)
         else:
             break
-    
+    log.debug(f"[MULTI] Selected emotes={selected_emotes}")
+
     return selected_emotes[:count]
 
 
 def format_message_with_emotions(message: str, emotion_state: dict, 
                                  available_emotes: Optional[List[str]] = None,
                                  max_emotes: int = 2) -> str:
+    log.debug(f"[FORMAT] Formatting message='{message}' with emotion_state={emotion_state}")
+
     """
     Format a message with emotion-appropriate emotes.
     
@@ -204,9 +219,9 @@ def format_message_with_emotions(message: str, emotion_state: dict,
     if emotes:
         emote_str = " ".join(emotes)
         return f"{message} {emote_str}"
-    
-    return message
 
+    log.debug(f"[FORMAT] No-emote case: returning original message")
+    return message
 
 # Integration example
 def integrate_with_emotional_system():

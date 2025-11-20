@@ -8,38 +8,71 @@ log = logging.getLogger("translation_cmd")
 
 HELP = "!t <lang> <text> | Example: !t jp Hello!  use !tlang to see supported languages"
 
+
 def _parse_args(raw: str) -> Tuple[Optional[str], Optional[str]]:
     """
     Parse '<lang> <text...>' from the caller-provided raw string.
     We expect 'raw' to be everything AFTER the command token.
     """
+    print(f"[DEBUG translation_cmd] _parse_args() called with raw={raw!r}")
+
     if not raw:
+        print("[DEBUG translation_cmd] _parse_args(): raw empty → returning (None,None)")
         return None, None
+
     raw = raw.strip()
+    print(f"[DEBUG translation_cmd] _parse_args(): stripped={raw!r}")
+
     parts = raw.split(maxsplit=1)
+    print(f"[DEBUG translation_cmd] _parse_args(): parts={parts!r}")
+
     if len(parts) < 2:
+        print("[DEBUG translation_cmd] _parse_args(): fewer than 2 parts → returning (None,None)")
         return None, None
+
     lang, text = parts[0].strip().lower(), parts[1].strip()
+
+    print(f"[DEBUG translation_cmd] _parse_args(): lang={lang!r} text={text!r}")
+
     return lang, text
+
 
 def handle_t_command(raw_after_cmd: str, username: str) -> str:
     """
     raw_after_cmd: the substring after '!t' (or '!translate'/'!trans')
     """
+    print(f"[DEBUG translation_cmd] handle_t_command() raw_after_cmd={raw_after_cmd!r} username={username!r}")
+
     lang, text = _parse_args(raw_after_cmd)
+    print(f"[DEBUG translation_cmd] handle_t_command(): parsed lang={lang!r} text={text!r}")
+
     if not lang or not text:
+        print("[DEBUG translation_cmd] handle_t_command(): missing lang/text → returning HELP")
         return HELP
 
     norm = normalize_lang(lang)
+    print(f"[DEBUG translation_cmd] handle_t_command(): normalized lang={norm!r}")
+
     if not norm:
-        return f"@{username} Unsupported language '{lang}'. {HELP}"
+        msg = f"@{username} Unsupported language '{lang}'. {HELP}"
+        print(f"[DEBUG translation_cmd] handle_t_command(): unsupported → {msg!r}")
+        return msg
 
     ok, result = translate_text(text, norm)
-    if not ok:
-        return f"@{username} {result}"
+    print(f"[DEBUG translation_cmd] handle_t_command(): translate returned ok={ok} result={result!r}")
 
-    # Keep it short and useful for Twitch
-    return f"@{username} → [{norm}] {result}"
+    if not ok:
+        msg = f"@{username} {result}"
+        print(f"[DEBUG translation_cmd] handle_t_command(): translation failed → {msg!r}")
+        return msg
+
+    final = f"@{username} → [{norm}] {result}"
+    print(f"[DEBUG translation_cmd] handle_t_command(): returning {final!r}")
+    return final
+
 
 def handle_tlang_command() -> str:
-    return supported_list_human()
+    print("[DEBUG translation_cmd] handle_tlang_command() called")
+    result = supported_list_human()
+    print(f"[DEBUG translation_cmd] handle_tlang_command(): returning {result!r}")
+    return result

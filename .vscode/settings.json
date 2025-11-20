@@ -1,6 +1,7 @@
 {
-    "python.terminal.useEnvFile": true,
-    "python-envs.defaultEnvManager": "ms-python.python:system",
-    "python-envs.pythonProjects": [],
-    "python.REPL.enableREPLSmartSend": false
+  "python.terminal.useEnvFile": true,
+  "python-envs.defaultEnvManager": "ms-python.python:system",
+  "python-envs.pythonProjects": [],
+  "python.REPL.enableREPLSmartSend": false,
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python"
 }

@@ -8,7 +8,7 @@ import re
 import yaml
 from pathlib import Path
 from difflib import SequenceMatcher
-
+print("[DEBUG fuzzy_trigger] Loaded fuzzy_trigger.py")
 
 def load_trigger_keywords():
     """Load trigger keywords from personality.yaml"""
@@ -26,16 +26,16 @@ def load_trigger_keywords():
         triggers = personality.get("trigger_keywords", [])
         
         # Return triggers if found, otherwise use defaults
+        print(f"[DEBUG fuzzy_trigger] Trigger keywords loaded: {triggers}")
         return triggers if triggers else ["medlartv", "medlar"]
+
     except Exception as e:
         print(f"[Fuzzy Trigger] Error loading personality.yaml: {e}")
         return ["medlartv", "medlar"]
 
-
 def calculate_similarity(a: str, b: str) -> float:
     """Calculate similarity ratio between two strings (0.0 to 1.0)."""
     return SequenceMatcher(None, a.lower(), b.lower()).ratio()
-
 
 def normalize_text(text: str) -> str:
     """Normalize text by removing special characters and extra spaces."""
@@ -44,7 +44,6 @@ def normalize_text(text: str) -> str:
     # Collapse multiple spaces
     text = re.sub(r'\s+', ' ', text)
     return text.strip()
-
 
 def check_keyboard_distance(word: str, target: str, max_distance: int = 1) -> bool:
     """
@@ -79,7 +78,6 @@ def check_keyboard_distance(word: str, target: str, max_distance: int = 1) -> bo
     
     return differences <= max_distance
 
-
 def check_missing_letters(word: str, target: str, max_missing: int = 2) -> bool:
     """
     Check if word is target with missing letters.
@@ -103,7 +101,6 @@ def check_missing_letters(word: str, target: str, max_missing: int = 2) -> bool:
     missing = len(target) - len(word)
     return missing <= max_missing
 
-
 def check_extra_letters(word: str, target: str, max_extra: int = 2) -> bool:
     """
     Check if word is target with extra letters.
@@ -113,7 +110,6 @@ def check_extra_letters(word: str, target: str, max_extra: int = 2) -> bool:
         return False
     
     return check_missing_letters(target, word, max_extra)
-
 
 def check_swapped_letters(word: str, target: str) -> bool:
     """
@@ -142,7 +138,6 @@ def check_swapped_letters(word: str, target: str) -> bool:
         i += 1
     
     return swaps <= 2
-
 
 def is_trigger_word(word: str, strict: bool = False) -> bool:
     """
@@ -180,26 +175,30 @@ def is_trigger_word(word: str, strict: bool = False) -> bool:
         
         # High similarity (>= 85%)
         if calculate_similarity(normalized, trigger_norm) >= 0.85:
+            print(f"[DEBUG fuzzy_trigger] TRIGGER: similarity match '{normalized}' vs '{trigger_norm}'")
             return True
         
         # Keyboard typos (1 key away)
         if check_keyboard_distance(normalized, trigger_norm, max_distance=1):
+            print(f"[DEBUG fuzzy_trigger] TRIGGER: keyboard distance '{normalized}' vs '{trigger_norm}'")
             return True
         
         # Missing letters (up to 2)
         if check_missing_letters(normalized, trigger_norm, max_missing=2):
+            print(f"[DEBUG fuzzy_trigger] TRIGGER: missing letters '{normalized}' vs '{trigger_norm}'")
             return True
         
         # Extra letters (up to 2)
         if check_extra_letters(normalized, trigger_norm, max_extra=2):
+            print(f"[DEBUG fuzzy_trigger] TRIGGER: extra letters '{normalized}' vs '{trigger_norm}'")
             return True
         
         # Swapped adjacent letters
         if check_swapped_letters(normalized, trigger_norm):
+            print(f"[DEBUG fuzzy_trigger] TRIGGER: swapped letters '{normalized}' vs '{trigger_norm}'")
             return True
     
     return False
-
 
 def find_triggers_in_message(message: str, strict: bool = False) -> list:
     """
@@ -214,6 +213,7 @@ def find_triggers_in_message(message: str, strict: bool = False) -> list:
     """
     # Split message into words
     words = re.findall(r'\b\w+\b', message)
+    print(f"[DEBUG fuzzy_trigger] Scanning message: '{message}'")
     
     # Also check multi-word combinations
     message_normalized = normalize_text(message)
@@ -223,6 +223,7 @@ def find_triggers_in_message(message: str, strict: bool = False) -> list:
     # Check individual words
     for word in words:
         if is_trigger_word(word, strict):
+            print(f"[DEBUG fuzzy_trigger] FOUND trigger word: '{word}'")
             triggers_found.append(word)
     
     # Check multi-word triggers from personality.yaml
@@ -235,20 +236,18 @@ def find_triggers_in_message(message: str, strict: bool = False) -> list:
     
     return triggers_found
 
-
 def should_respond(message: str, strict: bool = False) -> bool:
     """
     Determine if MedlarTV should respond to this message.
-    
-    Args:
-        message: The chat message
-        strict: If True, only respond to exact/close mentions
-    
-    Returns:
-        True if message contains trigger words
     """
-    return len(find_triggers_in_message(message, strict)) > 0
+    print(f"[DEBUG fuzzy_trigger] should_respond() called with message='{message}' (strict={strict})")
 
+    # Run the actual detection
+    found = find_triggers_in_message(message, strict)
+
+    print(f"[DEBUG fuzzy_trigger] should_respond → {len(found) > 0} (found={found})")
+
+    return len(found) > 0
 
 # --- TESTING / DEMO ---
 def test_fuzzy_trigger():
@@ -303,7 +302,6 @@ def test_fuzzy_trigger():
     print("=" * 60)
     print(f"Results: {passed} passed, {failed} failed ({passed}/{len(test_cases)})")
     print("=" * 60)
-
 
 if __name__ == "__main__":
     test_fuzzy_trigger()

@@ -2,6 +2,10 @@
 MedlarTV Emotion Type Definitions
 Centralized emotion constants and types
 """
+import logging
+log = logging.getLogger("emotion_types")
+log.setLevel(logging.DEBUG)
+log.debug("[DEBUG] emotion_types.py loaded successfully")
 
 from typing import Literal, Dict
 from enum import Enum
@@ -47,6 +51,7 @@ DEFAULT_EMOTIONS: EmotionState = {
     "jealousy": 0.0,
     "pride": 0.0,
 }
+log.debug(f"[DEBUG] DEFAULT_EMOTIONS loaded: {DEFAULT_EMOTIONS}")
 
 DEFAULT_MOODS: MoodState = {
     "hype": 0.25,
@@ -54,12 +59,21 @@ DEFAULT_MOODS: MoodState = {
     "snarky": 0.25,
     "supportive": 0.25,
 }
+log.debug(f"[DEBUG] DEFAULT_MOODS loaded: {DEFAULT_MOODS}")
 
 # Emotion intensity thresholds
 EMOTION_THRESHOLD_LOW = 0.3
 EMOTION_THRESHOLD_MEDIUM = 0.6
 EMOTION_THRESHOLD_HIGH = 0.8
+log.debug(
+    f"[DEBUG] Emotion thresholds: low={EMOTION_THRESHOLD_LOW}, "
+    f"medium={EMOTION_THRESHOLD_MEDIUM}, high={EMOTION_THRESHOLD_HIGH}"
+)
 
 # Mood transition rates
 MOOD_DECAY_RATE = 0.1
 MOOD_TRANSITION_SPEED = 0.3
+log.debug(
+    f"[DEBUG] Mood constants: decay={MOOD_DECAY_RATE}, transition_speed={MOOD_TRANSITION_SPEED}"
+)
+

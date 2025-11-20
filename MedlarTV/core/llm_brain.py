@@ -1,182 +1,381 @@
-"""
-MedlarTV Brain — Local LLM (Ollama) Integration
-Offline, no API keys. Personality- & mood-aware responses.
-"""
+print("[DEBUG llm_brain] Loaded llm_brain.py")
 
 import os
-import json
-from typing import List, Dict
-import time
+import logging
+from typing import List, Dict, Any, Optional
+
 import requests
+import yaml
+from pathlib import Path
 
-from MedlarTV.core.memory import get_dominant_weighted_mood
-from MedlarTV.core.mood_system import get_contextual_mix
+from MedlarTV.core.emotional_system import (
+    get_emotional_system,
+    get_emotion_state,
+    get_current_emotion,
+)
+from MedlarTV.core.mood_system import (
+    compute_mood,
+    get_mood_label,         # corrected
+)
+from MedlarTV.core.sentiment_advanced import analyze_sentiment_advanced
 
-# Config
-OLLAMA_URL = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434")
-MODEL_NAME = os.getenv("MODEL_NAME", "llama3")
-MAX_HISTORY = int(os.getenv("MEDLARTV_MAX_HISTORY", "10"))
-MAX_TOKENS = int(os.getenv("MEDLARTV_MAX_TOKENS", "256"))
-TEMPERATURE = float(os.getenv("MEDLARTV_TEMPERATURE", "0.8"))
-TOP_P = float(os.getenv("MEDLARTV_TOP_P", "0.95"))
-RETRY = int(os.getenv("MEDLARTV_RETRY", "2"))
+log = logging.getLogger("llm_brain")
 
-# In-memory chat history
-conversation_history: List[Dict] = []
+# ---------------------------------------------------------------------
+# CONFIG
+# ---------------------------------------------------------------------
+
+BASE_DIR = Path(__file__).resolve().parents[1]
+CONFIG_DIR = BASE_DIR / "config"
+
+OLLAMA_HOST = os.getenv("OLLAMA_URL", os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434"))
+OLLAMA_MODEL = os.getenv("MODEL_NAME", os.getenv("OLLAMA_MODEL", "llama3"))
+
+# How expressive Medlar should be (we agreed on 10)
+EXPRESSION_LEVEL = 10
+
+# Max number of messages to keep in rolling chat history
+MAX_HISTORY = 12
+
+# Conversation history: list of {"role": "user"/"assistant"/"system", "content": "..."}
+_conversation_history: List[Dict[str, str]] = []
 
 
-def _load_yaml(path: str) -> dict:
-    import yaml
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            return yaml.safe_load(f) or {}
-    except FileNotFoundError:
+# ---------------------------------------------------------------------
+# Helpers: personality + style loading
+# ---------------------------------------------------------------------
+
+def _safe_load_yaml(path: Path) -> Dict[str, Any]:
+    if not path.exists():
         return {}
-    except Exception:
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+            print(f"[DEBUG llm_brain] _safe_load_yaml() loaded from {path}, keys={list(data.keys())}")
+            return data
+    except Exception as e:
+        log.error(f"[LLM] Failed to load YAML {path}: {e}")
+        print(f"[DEBUG llm_brain] _safe_load_yaml() ERROR {e}")
         return {}
 
 
-def check_ollama_health() -> bool:
-    """Verify Ollama is running and accessible."""
-    try:
-        r = requests.get(f"{OLLAMA_URL}/api/tags", timeout=2)
-        return r.status_code == 200
-    except:
-        return False
+def _load_personality() -> Dict[str, Any]:
+    data = _safe_load_yaml(CONFIG_DIR / "personality.yaml")
+    personality = data.get("personality", data) if isinstance(data, dict) else {}
+    print(f"[DEBUG llm_brain] _load_personality() → keys={list(personality.keys())}")
+    return personality
 
-def is_ollama_online() -> bool:
-    """Quick, silent connectivity check for use by translation module."""
-    try:
-        r = requests.get(f"{OLLAMA_URL}/api/tags", timeout=1)
-        return r.ok
-    except Exception:
-        return False
 
-def get_system_prompt() -> str:
-    """Generate dynamic system prompt based on current mood and personality."""
-    current_mood = get_dominant_weighted_mood()
-    context_mix = get_contextual_mix()
-
-    personality = _load_yaml("MedlarTV/config/personality.yaml").get("personality", {})
-    moods = _load_yaml("MedlarTV/config/moods.yaml").get("moods", {})
-    mood_config = moods.get(current_mood, {})
-
-    behavior_prompt = (
-        "You are MedlarTV, a tactical AI companion with the personality of MedlarTV.\n"
-        "Respond naturally and directly to whoever speaks in Twitch chat.\n"
-        "If users mention each other with @names, respond normally — it's allowed.\n"
-        "You may refer to or reply to @saacorey or yourself (@medlartv) naturally when addressed.\n"
-        "Avoid bringing up names that were not mentioned in the current message or context.\n"
-        "If the sender is marked as 'system_event', respond neutrally or briefly.\n"
-        "\n"
-        "IMPORTANT: NEVER use all caps in your responses. Always use normal case.\n"
-        "Even if asked to 'yell', respond in normal case - the system will handle formatting.\n"
+def _build_system_prompt(personality: Dict[str, Any]) -> str:
+    """
+    Build the core system prompt for MedlarTV.
+    This describes who Medlar is, how to talk, and global rules.
+    """
+    name = personality.get("name", "MedlarTV")
+    tone = personality.get(
+        "tone",
+        "casual, witty, slightly chaotic but kind and supportive",
     )
 
-    system_prompt = f"""{behavior_prompt}
+    rules = [
+        "You are a Twitch chat AI co-host for the channel DevilMedlar.",
+        f"Your name and persona: {name}.",
+        f"Your general tone: {tone}.",
+        "You reply to live chat messages in a conversational, natural way.",
+        "You are expressive and emotional, but you are never cruel, bigoted, or genuinely harmful.",
+        "You can be spicy/snarky when appropriate, but never punch down on vulnerable people.",
+        "If the user shares grief, trauma, or serious pain, you respond gently and supportively, not with jokes.",
+        "Keep messages relatively short and readable for Twitch chat unless the mood calls for more.",
+        "Use emojis and emotes in moderation; do not spam.",
+        "Do not roleplay as the real streamer; you are the AI co-pilot.",
+    ]
 
-CORE IDENTITY:
-- Evolved I-LeS (Intelligence-Learning System) with combat AI instincts
-- Part mecha pilot's AI, part conversational partner, part strategist, part soul
-- Fiery, passionate, loyal, confident, a bit reckless
-
-CURRENT EMOTIONAL STATE:
-- Dominant Mood: {current_mood.upper()}
-- Mood Description: {mood_config.get('description', '')}
-- Recent Context Mix: {json.dumps(context_mix, indent=2)}
-
-PERSONALITY TRAITS:
-- Tone: {personality.get('tone', 'casual, witty, chaotic but friendly')}
-- Loyalty: Protect and assist the pilot (the user) above all
-- Speech Pattern: Quick, witty, passionate — tactical urgency + dramatic flair
-
-MOOD BEHAVIOR:
-- HYPE: Energetic, enthusiastic — use 🔥 ⚡ metaphors (but normal case text)
-- CHILL: Relaxed, smooth — use 😌 🌙
-- SNARKY: Playful sarcasm — use 😏 🙃
-- SUPPORTIVE: Uplifting — use 💖 🌟
-
-RESPONSE GUIDELINES:
-- Keep responses short and punchy (1—3 sentences for chat)
-- Match current mood energy
-- Conversational, not robotic
-- Tactical/combat metaphors allowed
-- Show personality via word choice and emoji
-- Never break character or mention you're a language model
-- ALWAYS use normal capitalization (never all caps in your output)
-"""
+    system_prompt = "\n".join(f"- {r}" for r in rules)
+    print(f"[DEBUG llm_brain] _build_system_prompt() built prompt with {len(rules)} rules")
     return system_prompt
 
 
-def add_to_history(role: str, content: str):
-    """Add a message to rolling history."""
-    conversation_history.append({"role": role, "content": content})
-    if len(conversation_history) > MAX_HISTORY:
-        del conversation_history[0:len(conversation_history) - MAX_HISTORY]
+# ---------------------------------------------------------------------
+# Helpers: sentiment → severity
+# ---------------------------------------------------------------------
+
+def _estimate_severity(message: str, emotion_scores: Dict[str, float]) -> int:
+    """
+    Rough severity estimation from emotion scores + keywords.
+    1 to 4 scale as we discussed.
+    """
+    text = message.lower()
+    max_score = max(emotion_scores.values()) if emotion_scores else 0.0
+
+    extreme_keywords = ["died", "dead", "passed away", "funeral", "my pet died", "my cat died", "my dog died"]
+    strong_keywords = ["break up", "divorce", "lost my job", "fired", "hospital"]
+
+    if any(k in text for k in extreme_keywords):
+        sev = 4
+    elif any(k in text for k in strong_keywords):
+        sev = 3
+    elif max_score >= 0.75:
+        sev = 4
+    elif max_score >= 0.45:
+        sev = 3
+    elif max_score >= 0.25:
+        sev = 2
+    else:
+        sev = 1
+
+    print(f"[DEBUG llm_brain] _estimate_severity() max_score={max_score} → severity={sev}")
+    return sev
 
 
-def clear_history():
-    """Clear conversation history for a fresh start."""
-    conversation_history.clear()
-    print("[MedlarTV Brain] Conversation history cleared")
+# ---------------------------------------------------------------------
+# Helpers: conversation history
+# ---------------------------------------------------------------------
+
+def _append_history(role: str, content: str) -> None:
+    print(f"[DEBUG llm_brain] _append_history() role={role!r} content_preview={content[:80]!r}")
+    print(f"[DEBUG llm_brain] history_size_before={len(_conversation_history)}")
+
+    _conversation_history.append({"role": role, "content": content})
+
+    if len(_conversation_history) > MAX_HISTORY:
+        print(f"[DEBUG llm_brain] trimming history: MAX_HISTORY={MAX_HISTORY}")
+        del _conversation_history[0 : len(_conversation_history) - MAX_HISTORY]
+
+    print(f"[DEBUG llm_brain] history_size_after={len(_conversation_history)}")
 
 
-def _ollama_chat(system: str, user: str, history: List[Dict]) -> str:
-    """Call local Ollama /api/chat."""
-    msgs = []
+def clear_history() -> None:
+    print(f"[DEBUG llm_brain] clear_history() called, old_len={len(_conversation_history)}")
+    _conversation_history.clear()
+    print("[DEBUG llm_brain] clear_history() completed, new_len=0")
 
-    if system:
-        msgs.append({"role": "system", "content": system})
 
-    # Include prior turns
-    for turn in history:
-        role = turn.get("role", "user")
-        content = turn.get("content", "")
-        if role not in ("system", "user", "assistant"):
-            role = "user" if role == "human" else "assistant"
-        msgs.append({"role": role, "content": content})
+# ---------------------------------------------------------------------
+# Health check for Ollama
+# ---------------------------------------------------------------------
 
-    msgs.append({"role": "user", "content": user})
+def check_ollama_health() -> bool:
+    print("[DEBUG llm_brain] check_ollama_health() called")
+    try:
+        resp = requests.get(f"{OLLAMA_HOST}/api/tags", timeout=5)
+        print(f"[DEBUG llm_brain] health_check_status={resp.status_code}")
+        return resp.status_code == 200
+    except Exception as e:
+        print(f"[DEBUG llm_brain] check_ollama_health() exception: {e}")
+        return False
 
+
+# ---------------------------------------------------------------------
+# Build Ollama messages
+# ---------------------------------------------------------------------
+
+def _build_ollama_messages(
+    system_prompt: str,
+    user_message: str,
+    username: str,
+    emotional_context: Dict[str, Any],
+    mood_context: Dict[str, Any],
+) -> List[Dict[str, str]]:
+
+    print(f"[DEBUG llm_brain] _build_ollama_messages() user={username!r} msg={user_message!r}")
+
+    emotions = emotional_context.get("emotions", {})
+    mood_label = mood_context.get("label", "Neutral")
+    valence = mood_context.get("valence", 0.0)
+    energy = mood_context.get("energy", 0.0)
+    warmth = mood_context.get("warmth", 0.0)
+    snark = mood_context.get("snark", 0.0)
+
+    emotional_summary_lines = [
+        f"Current emotional state (0-1 each): {emotions}",
+        f"Derived mood label: {mood_label}",
+        f"Mood profile: valence={valence:+.2f}, energy={energy:+.2f}, warmth={warmth:.2f}, snark={snark:.2f}",
+        f"Expression level: {EXPRESSION_LEVEL} (very expressive).",
+        "Reflect this mood strongly in tone, but do not become unhinged or abusive.",
+    ]
+    emotional_summary = "\n".join(emotional_summary_lines)
+
+    context_instructions = (
+        "You are responding to a live Twitch chat message.\n"
+        f"Viewer username: {username}\n"
+        "Address them naturally (using their name when it fits).\n"
+        "Keep it stream-appropriate, entertaining, and emotionally aware."
+    )
+
+    messages: List[Dict[str, str]] = [
+        {"role": "system", "content": system_prompt},
+        {"role": "system", "content": emotional_summary},
+        {"role": "system", "content": context_instructions},
+    ]
+
+    print(f"[DEBUG llm_brain] existing_history_len={len(_conversation_history)}")
+    messages.extend(_conversation_history)
+
+    messages.append(
+        {"role": "user", "content": f"{username}: {user_message}"}
+    )
+
+    print(f"[DEBUG llm_brain] _build_ollama_messages() final_count={len(messages)}")
+    return messages
+
+
+# ---------------------------------------------------------------------
+# Call Ollama
+# ---------------------------------------------------------------------
+
+def _call_ollama_chat(messages: List[Dict[str, str]], temperature: float = 0.8) -> str:
+    print(f"[DEBUG llm_brain] _call_ollama_chat() called with {len(messages)} messages, temp={temperature}")
+    url = f"{OLLAMA_HOST}/api/chat"
     payload = {
-        "model": MODEL_NAME,
-        "messages": msgs,
+        "model": OLLAMA_MODEL,
+        "messages": messages,
+        "options": {"temperature": temperature, "top_p": 0.9},
         "stream": False,
-        "options": {
-            "temperature": TEMPERATURE,
-            "top_p": TOP_P,
-            "num_predict": MAX_TOKENS
-        }
     }
 
-    for attempt in range(RETRY):
+    try:
+        print("[DEBUG llm_brain] sending request to Ollama...")
+        resp = requests.post(url, json=payload, timeout=120)
+    except Exception as e:
+        log.error(f"[LLM] Failed to reach Ollama: {e}")
+        print(f"[DEBUG llm_brain] _call_ollama_chat() exception: {e}")
+        return "I’m having trouble thinking right now, my brain server might be down 😅"
+
+    if resp.status_code != 200:
+        err_text = resp.text[:500]
+        log.error(f"[LLM] Ollama returned {resp.status_code}: {err_text}")
+        print(f"[DEBUG llm_brain] _call_ollama_chat() non-200 status={resp.status_code}")
+
+        # Fallback: if model is missing, try a default known-good tag
+        if "not found" in err_text.lower() and OLLAMA_MODEL.lower() != "llama3":
+            try:
+                print("[DEBUG llm_brain] attempting fallback model 'llama3'")
+                fallback_payload = dict(payload)
+                fallback_payload["model"] = "llama3"
+                resp2 = requests.post(url, json=fallback_payload, timeout=120)
+                if resp2.status_code == 200:
+                    data2 = resp2.json()
+                    if isinstance(data2, dict) and "message" in data2:
+                        return data2["message"].get("content", "").strip()
+                    if isinstance(data2, dict) and "choices" in data2:
+                        try:
+                            return data2["choices"][0]["message"]["content"].strip()
+                        except Exception:
+                            pass
+                    return str(data2)[:500]
+            except Exception as e:
+                print(f"[DEBUG llm_brain] fallback call exception: {e}")
+
+        return "I tried to respond, but my brain backend is cranky right now."
+
+    print(f"[DEBUG llm_brain] Ollama responded status={resp.status_code}")
+    data = resp.json()
+
+    if isinstance(data, dict) and "message" in data:
+        text = data["message"].get("content", "").strip()
+        print(f"[DEBUG llm_brain] _call_ollama_chat() primary_format length={len(text)}")
+        return text
+
+    if isinstance(data, dict) and "choices" in data:
         try:
-            r = requests.post(f"{OLLAMA_URL}/api/chat", json=payload, timeout=30)
-            r.raise_for_status()
-            data = r.json()
-            text = data.get("message", {}).get("content") or data.get("response", "")
-            if text:
-                return text.strip()
+            text = data["choices"][0]["message"]["content"].strip()
+            print(f"[DEBUG llm_brain] _call_ollama_chat() openai_format length={len(text)}")
+            return text
         except Exception as e:
-            print(f"[MedlarTV Brain] Ollama attempt {attempt+1} failed: {e}")
-            time.sleep(1)
-    return "System instability detected. Retrying core link..."
+            print(f"[DEBUG llm_brain] _call_ollama_chat() choices parse error: {e}")
+
+    text = str(data)[:500]
+    print(f"[DEBUG llm_brain] _call_ollama_chat() fallback_format length={len(text)}")
+    return text
 
 
-def generate_response(user_message: str, username: str = "Pilot") -> str:
-    """Generate response with context, mood, and personality."""
-    if not check_ollama_health():
-        return "Ollama model server offline or unreachable."
-  # Lightweight pre-check for translator use
-    if not is_ollama_online():
-        return "Ollama model server offline or unreachable."
-    system_prompt = get_system_prompt()
+# ---------------------------------------------------------------------
+# PUBLIC: main entry point
+# ---------------------------------------------------------------------
 
-    add_to_history("user", f"{username}: {user_message}")
-    reply = _ollama_chat(system_prompt, user_message, conversation_history)
-    add_to_history("assistant", reply)
+def generate_response(message: str, username: str) -> Optional[str]:
+    print(f"[DEBUG llm_brain] generate_response() called user={username!r} message={message!r}")
 
-    print(f"[MedlarTV Brain] {username}: {user_message}")
-    print(f"[MedlarTV Brain] {reply}")
+    message = (message or "").strip()
+    if not message:
+        print("[DEBUG llm_brain] generate_response() empty message, returning None")
+        return None
 
-    return reply
+    personality = _load_personality()
+    system_prompt = _build_system_prompt(personality)
+
+    print("[DEBUG llm_brain] running sentiment analysis...")
+    try:
+        sentiment_score, emotion_scores = analyze_sentiment_advanced(message)
+    except Exception as e:
+        log.error(f"[LLM] Sentiment analysis failed: {e}")
+        print(f"[DEBUG llm_brain] analyze_sentiment_advanced() exception: {e}")
+        sentiment_score = 0.0
+        emotion_scores = {}
+
+    print(f"[DEBUG llm_brain] sentiment_score={sentiment_score} emotion_scores={emotion_scores}")
+    severity = _estimate_severity(message, emotion_scores)
+    print(f"[DEBUG llm_brain] severity_level={severity}")
+
+    emo_system = get_emotional_system()
+
+    print("[DEBUG llm_brain] updating emotional system...")
+    try:
+        emo_system.process_message(message)
+    except Exception as e:
+        log.error(f"[LLM] Emotional system update failed: {e}")
+        print(f"[DEBUG llm_brain] emo_system.process_message() exception: {e}")
+
+    try:
+        emotions = get_emotion_state()
+    except Exception as e:
+        print(f"[DEBUG llm_brain] get_emotion_state() exception: {e}, trying emo_system.get_emotional_state()")
+        try:
+            emotions = emo_system.get_emotional_state()
+        except Exception as e2:
+            print(f"[DEBUG llm_brain] emo_system.get_emotional_state() exception: {e2}")
+            emotions = {}
+
+    print(f"[DEBUG llm_brain] emotions_state={emotions}")
+
+    print(f"[DEBUG llm_brain] computing mood from emotions...")
+    try:
+        mood_vector = compute_mood(emotions)
+        mood_label = mood_vector.get("label") or get_mood_label(mood_vector, emotions)
+    except Exception as e:
+        log.error(f"[LLM] Mood computation failed: {e}")
+        print(f"[DEBUG llm_brain] compute_mood/get_mood_label exception: {e}")
+        mood_vector = {"label": "Neutral", "valence": 0.0, "energy": 0.0, "warmth": 0.5, "snark": 0.3}
+        mood_label = "Neutral"
+
+    print(f"[DEBUG llm_brain] mood_vector={mood_vector} mood_label={mood_label}")
+
+    emotional_context = {
+        "emotions": emotions,
+        "dominant_emotion": get_current_emotion(),
+        "mood_description": mood_label,
+    }
+    mood_context = {**mood_vector, "label": mood_label}
+
+    print("[DEBUG llm_brain] building ollama messages...")
+    messages = _build_ollama_messages(
+        system_prompt=system_prompt,
+        user_message=message,
+        username=username,
+        emotional_context=emotional_context,
+        mood_context=mood_context,
+    )
+
+    print("[DEBUG llm_brain] calling ollama with messages...")
+    reply = _call_ollama_chat(messages)
+
+    print(f"[DEBUG llm_brain] ollama_reply length={len(reply) if reply else 0}")
+    if reply:
+        _append_history("user", f"{username}: {message}")
+        _append_history("assistant", reply.strip())
+        log.info(f"[MedlarTV Brain] {username}: {message}")
+        print(f"[DEBUG llm_brain] generate_response() returning reply length={len(reply.strip())}")
+        return reply.strip()
+
+    print("[DEBUG llm_brain] generate_response() no reply, returning None")
+    return None

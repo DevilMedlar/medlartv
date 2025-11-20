@@ -8,3 +8,5 @@ libretranslate==1.7.3
 argostranslate==1.9.6
 requests==2.31.0
 torch==2.5.0
+duckduckgo-search==4.1.0
+wikipedia-api==0.6.0

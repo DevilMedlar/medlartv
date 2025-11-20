@@ -1,915 +1,437 @@
+# Refactored twitch_listener.py
+# Clean, stable, updated for new command handlers & OAuth-safe stream management
+
 import os
 import socket
+import ssl
 import time
-import yaml
-import requests
+import threading
 import logging
-from dotenv import load_dotenv
+from typing import Dict, Any, Optional, List
 from pathlib import Path
+import yaml
 
-from MedlarTV.core.translation_command import handle_t_command as handle_translate_command, handle_tlang_command as get_supported_languages_list
-from MedlarTV.core.memory import record_mood, get_dominant_weighted_mood
-from MedlarTV.core.mood_system import blended_phrase
-from MedlarTV.core.mood_system import record_session_mood
-from MedlarTV.core.fuzzy_trigger import should_respond as fuzzy_should_respond, find_triggers_in_message
-from MedlarTV.avatar.bridge.client import register_channel, send_mood_update, ws_send
-from MedlarTV.core.translation import detect_language, get_multilingual_greeting, add_language_indicator
-from MedlarTV.core.response_templates import get_smart_response
-from MedlarTV.core.interaction_logger import log_interaction, log_command, log_mood_change, log_error
-from MedlarTV.core.moderation import (
-    check_message,
-    execute_timeout,
-    execute_ban,
-    handle_mod_command,
-    is_mod_command
-)
-from MedlarTV.core.stream_management import (
-    get_stream_info,
-    get_channel_info,
-    update_stream_title,
-    update_stream_category,
-    format_stream_info
-)
+from MedlarTV.core.fuzzy_trigger import should_respond
+from MedlarTV.core.command_handlers import execute_command
+from MedlarTV.core.moderation import check_message, execute_timeout, execute_ban, execute_delete
 from MedlarTV.core.twitch_events import (
-    detect_raid,
-    detect_subscription,
-    detect_channel_point_redemption,
-    detect_bits,
-    get_raid_response,
-    get_sub_response,
-    get_channel_point_response,
-    get_bits_response,
-    add_random_emote
+    detect_raid, detect_subscription, detect_channel_point_redemption, detect_bits,
 )
-from MedlarTV.core.content_filter import (
-    filter_message,
-    should_enable_all_caps,
-    get_safety_response
-)
+from MedlarTV.core.llm_brain import generate_response
 
-# --- Configure Logging ---
-logging.basicConfig(
-    level=logging.INFO,
-    format='[%(asctime)s] [%(levelname)s] %(message)s',
-    datefmt='%H:%M:%S'
-)
 log = logging.getLogger("twitch_listener")
 
-# --- Load Environment ---
-load_dotenv()
+# ----------------------------------------------------------------------------
+# IRC Connection Setup
+# ----------------------------------------------------------------------------
 
-TOKEN = os.getenv("TWITCH_TOKEN")
-NICK = os.getenv("TWITCH_NICK")
-CHANNEL = os.getenv("TWITCH_CHANNEL")
+TWITCH_SERVER = "irc.chat.twitch.tv"
+TWITCH_PORT = 6697
 
-if not all([TOKEN, NICK, CHANNEL]):
-    raise EnvironmentError("Missing TWITCH_TOKEN, TWITCH_NICK, or TWITCH_CHANNEL in .env")
+# IMPORTANT:
+# IRC login MUST use the BOT token, not broadcaster token.
+OAUTH_TOKEN = os.getenv("MEDLARTV_TWITCH_TOKEN", "")
 
-# --- Constants ---
-CORE_URL = os.getenv("CORE_URL", "http://127.0.0.1:8000")
-SERVER = "irc.chat.twitch.tv"
-PORT = 6667
-COOLDOWN_SECONDS = 8
+# Bot nickname
+BOT_NICK = os.getenv("TWITCH_NICK", "MedlarTV")
 
-# --- State Variables ---
-current_mood = "chill"
-CO_PILOTS = set()  # Active co-pilots (usernames)
-PILOT = CHANNEL.lstrip("#").lower()  # Channel owner is the Pilot
-recent_msgs = {}
-LAST_REPLY_AT = 0
-COPILOT_CONFIG_PATH = Path("MedlarTV/config/copilots.yaml")
+# Twitch channel
+CHANNEL = os.getenv("TWITCH_CHANNEL", "#devilmedlar")
 
-# Track the socket globally so we can use it in remove_copilot
-SOCKET = None
+# Clean oauth format
+if OAUTH_TOKEN.startswith("oauth:"):
+    IRC_TOKEN = OAUTH_TOKEN
+else:
+    IRC_TOKEN = f"oauth:{OAUTH_TOKEN}"
 
-# --- Config Variables (populated by load_config) ---
-COMMANDS = {}
-PERSONALITY = {}
-MOODS = {}
-STYLE_PROFILES = {}
-POLICIES = {}
+# ----------------------------------------------------------------------------
+# Co-Pilot management
+# ----------------------------------------------------------------------------
 
+_COPILOTS_FILE = Path(__file__).resolve().parents[1] / "config" / "copilots.yaml"
 
-# --- CO-PILOT MANAGEMENT ---
-def load_copilots():
-    """Load co-pilots from config file."""
-    global CO_PILOTS
-    if not COPILOT_CONFIG_PATH.exists():
-        # Create default config
-        default_config = {"copilots": {"active": [], "history": []}}
-        COPILOT_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with open(COPILOT_CONFIG_PATH, 'w', encoding='utf-8') as f:
-            yaml.safe_dump(default_config, f)
-        return
-    
-    with open(COPILOT_CONFIG_PATH, 'r', encoding='utf-8') as f:
-        data = yaml.safe_load(f) or {}
-    
-    active = data.get("copilots", {}).get("active", [])
-    CO_PILOTS = {entry["username"].lower() for entry in active}
-    log.info(f"Loaded {len(CO_PILOTS)} co-pilots: {', '.join(CO_PILOTS) if CO_PILOTS else 'none'}")
+def _ensure_copilots_file() -> None:
+    if not _COPILOTS_FILE.exists():
+        data = {"copilots": {"active": [], "history": []}}
+        _COPILOTS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with _COPILOTS_FILE.open("w", encoding="utf-8") as f:
+            yaml.safe_dump(data, f)
 
+def _load_copilots() -> Dict[str, Any]:
+    _ensure_copilots_file()
+    try:
+        with _COPILOTS_FILE.open("r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+            return data
+    except Exception:
+        return {"copilots": {"active": [], "history": []}}
 
-def save_copilots():
-    """Save co-pilots to config file."""
-    data = {"copilots": {"active": [], "history": []}}
-    
-    if COPILOT_CONFIG_PATH.exists():
-        with open(COPILOT_CONFIG_PATH, 'r', encoding='utf-8') as f:
-            data = yaml.safe_load(f) or data
-    
-    # Update active list
-    data["copilots"]["active"] = [
-        {"username": username, "added_at": int(time.time())}
-        for username in CO_PILOTS
-    ]
-    
-    with open(COPILOT_CONFIG_PATH, 'w', encoding='utf-8') as f:
+def _save_copilots(data: Dict[str, Any]) -> None:
+    _COPILOTS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with _COPILOTS_FILE.open("w", encoding="utf-8") as f:
         yaml.safe_dump(data, f)
 
+def _get_active_copilots() -> List[str]:
+    data = _load_copilots()
+    return list(map(str, data.get("copilots", {}).get("active", [])))
 
-def add_copilot(username: str) -> bool:
-    """Add a co-pilot, join their channel, and register with bridge."""
-    global SOCKET
-    username = username.lower()
-    
-    if username in CO_PILOTS:
-        return False
-    
-    CO_PILOTS.add(username)
-    save_copilots()
-    
-    # Join the co-pilot's channel
-    if SOCKET:
-        copilot_channel = f"#{username}"
-        try:
-            SOCKET.send(f"JOIN {copilot_channel}\r\n".encode("utf-8"))
-            log.info(f"✅ Joined channel: {copilot_channel}")
-            
-            # Register with WebSocket bridge
-            try:
-                register_channel(copilot_channel)
-                log.info(f"✅ Registered with bridge: {copilot_channel}")
-            except Exception as e:
-                log.warning(f"[Bridge] Failed to register {copilot_channel}: {e}")
-            
-            log.info(f"✅ Co-Pilot added: {username}")
-            
-        except Exception as e:
-            log.error(f"Failed to join channel {copilot_channel}: {e}")
-            # Rollback if join failed
-            CO_PILOTS.remove(username)
-            save_copilots()
-            return False
-    else:
-        log.info(f"✅ Co-Pilot added: {username} (socket not ready, will join on next connect)")
-    
-    return True
-
-
-def remove_copilot(username: str) -> bool:
-    """Remove a co-pilot, leave their channel, and unregister from bridge."""
-    global SOCKET
-    username = username.lower()
-    
-    if username not in CO_PILOTS:
-        return False
-    
-    CO_PILOTS.remove(username)
-    save_copilots()
-    
-    # PART (leave) the co-pilot's channel
-    if SOCKET:
-        copilot_channel = f"#{username}"
-        try:
-            SOCKET.send(f"PART {copilot_channel}\r\n".encode("utf-8"))
-            log.info(f"❌ Left channel: {copilot_channel}")
-            
-            # Unregister from WebSocket bridge
-            try:
-                ws_send({
-                    "event": "unregister",
-                    "platform": "twitch",
-                    "channel": copilot_channel
-                })
-                log.info(f"❌ Unregistered from bridge: {copilot_channel}")
-            except Exception as e:
-                log.warning(f"[Bridge] Failed to unregister {copilot_channel}: {e}")
-            
-            log.info(f"❌ Co-Pilot removed: {username}")
-            
-        except Exception as e:
-            log.error(f"Failed to leave channel {copilot_channel}: {e}")
-    else:
-        log.info(f"❌ Co-Pilot removed: {username} (socket not ready)")
-    
-    return True
-
-
-def get_user_role(username: str, badges: dict = None) -> str:
-    """
-    Determine user's role: pilot, mod, copilot, vip, or user.
-    
-    Args:
-        username: Username to check
-        badges: Twitch badges dict (optional, for mod/vip detection)
-    
-    Returns:
-        Role string: "pilot", "mod", "copilot", "vip", or "user"
-    """
-    username = username.lower()
-    
-    # Check if user is broadcaster (highest priority)
-    if username == PILOT:
-        return "pilot"
-    
-    # Check if user is a Twitch moderator (from badges)
-    if badges and "moderator" in badges:
-        return "mod"
-    
-    # Check if user is a VIP (from badges)
-    if badges and "vip" in badges:
-        return "vip"
-    
-    # Check if user is a co-pilot
-    if username in CO_PILOTS:
-        return "copilot"
-    
-    # Default to regular user
-    return "user"
-
-def check_command_permission(username: str, cmd_config: dict, badges: dict = None) -> tuple:
-    """
-    Check if user has permission to use a command.
-    
-    Args:
-        username: Username attempting command
-        cmd_config: Command configuration from commands.yaml
-        badges: Twitch badges dict (optional)
-    
-    Returns:
-        Tuple of (has_permission: bool, denial_reason: str)
-    """
-    # Get user's role
-    user_role = get_user_role(username, badges)
-    
-    # Get allowed roles for this command (default to everybody if not specified)
-    allowed_roles = cmd_config.get("allowed_roles", ["everybody"])
-    
-    # If "everybody" is in allowed_roles, everyone can use it
-    if "everybody" in allowed_roles:
-        return True, ""
-    
-    # Pilot always has access to everything
-    if user_role == "pilot":
-        return True, ""
-    
-    # Check if user's role is in allowed roles
-    if user_role in allowed_roles:
-        return True, ""
-    
-    # Permission denied - create helpful message
-    role_names = {
-        "pilot": "Broadcaster",
-        "mod": "Moderator",
-        "copilot": "Co-Pilot",
-        "vip": "VIP",
-        "user": "Viewer"
-    }
-    
-    allowed_names = [role_names.get(role, role) for role in allowed_roles]
-    required = ", ".join(allowed_names)
-    
-    return False, f"This command requires: {required}"
-
-def extract_badges_from_irc(irc_message: str) -> dict:
-    """
-    Extract Twitch badges from IRC message tags.
-    
-    Args:
-        irc_message: Raw IRC message with tags
-    
-    Returns:
-        Dict of badges (e.g., {"moderator": "1", "vip": "1"})
-    """
-    badges = {}
-    
-    if not irc_message.startswith("@"):
-        return badges
-    
+def _role_prefix(username: str) -> str:
     try:
-        # Extract tags section
-        tags_section = irc_message.split(" ", 1)[0][1:]  # Remove @ prefix
-        
-        # Parse tags
-        for tag in tags_section.split(";"):
-            if "=" in tag:
-                key, value = tag.split("=", 1)
-                
-                # Parse badges tag
-                if key == "badges":
-                    if value:
-                        for badge in value.split(","):
-                            if "/" in badge:
-                                badge_name, badge_version = badge.split("/", 1)
-                                badges[badge_name] = badge_version
-    except Exception as e:
-        log.warning(f"[Badges] Failed to parse badges: {e}")
-    
-    return badges
+        channel_name = CHANNEL.lstrip("#").lower()
+        if username.lower() == channel_name:
+            return "Pilot "
+        if username.lower() in [u.lower() for u in _get_active_copilots()]:
+            return f"Co-Pilot @{username} "
+        return f"@{username} "
+    except Exception:
+        return f"@{username} "
 
-def format_username(username: str) -> str:
-    """Format username based on role."""
-    role = get_user_role(username)
-    if role == "pilot":
-        return "Pilot"
-    elif role == "copilot":
-        return f"Co-Pilot {username}"
-    else:
-        return f"@{username}"
-
-
-# --- CONFIG LOADING ---
-def load_yaml_file(path):
-    with open(path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
-
-
-def load_config():
-    global COMMANDS, PERSONALITY, MOODS, STYLE_PROFILES, POLICIES
-    base = os.path.dirname(__file__)
-    COMMANDS = load_yaml_file(os.path.join(base, "../config/commands.yaml")).get("commands", {})
-    PERSONALITY = load_yaml_file(os.path.join(base, "../config/personality.yaml")).get("personality", {})
-    MOODS = load_yaml_file(os.path.join(base, "../config/moods.yaml")).get("moods", {})
-    STYLE_PROFILES = load_styles()
-    POLICIES = load_policies()
-    load_copilots()  # Load co-pilots
-
-
-def load_styles():
-    base = os.path.dirname(__file__)
-    with open(os.path.join(base, "../config/style_profiles.yaml"), "r", encoding="utf-8") as f:
-        return yaml.safe_load(f).get("styles", {})
-
-
-def load_policies():
-    base = os.path.dirname(__file__)
+def _prepare_msg(text: str) -> str:
     try:
-        with open(os.path.join(base, "../config/policy.yaml"), "r", encoding="utf-8") as f:
-            return yaml.safe_load(f).get("tools", {})
-    except Exception as e:
-        log.warning(f"[Policy] Could not load: {e}")
-        return {}
+        return " ".join(text.splitlines())
+    except Exception:
+        return text
 
-
-def can_reply():
-    """Prevents MedlarTV from replying too often (rate limit)."""
-    global LAST_REPLY_AT
-    now = time.time()
-    if now - LAST_REPLY_AT < COOLDOWN_SECONDS:
+def _add_copilot(username: str) -> bool:
+    username = username.strip()
+    if not username:
         return False
-    LAST_REPLY_AT = now
-    return True
-
-
-# --- MOOD HANDLING ---
-def switch_mood(new_mood, auto=False):
-    """Update MedlarTV's mood and broadcast to bridge (sync-safe)."""
-    global current_mood
-    if new_mood == current_mood:
-        return
-    current_mood = new_mood
-    prefix = "Auto" if auto else "manual"
-    log.info(f"{prefix} mood switched to: {new_mood}")
-    record_mood(new_mood)
-    record_session_mood(new_mood)
-
-    try:
-        send_mood_update(new_mood)
-    except Exception as e:
-        log.warning(f"[Bridge] send_mood_update failed: {e}")
-
-    try:
-        requests.post(f"{CORE_URL}/mood", json={"mood": new_mood}, timeout=3)
-    except Exception as e:
-        log.warning(f"[Core] Mood update failed: {e}")
-
-
-def send_reply(sock, message, reply_to_msg_id=None):
-    """Send a message to Twitch chat with optional reply threading."""
-    if reply_to_msg_id:
-        sock.send(f"@reply-parent-msg-id={reply_to_msg_id} PRIVMSG {CHANNEL} :{message}\r\n".encode("utf-8"))
-    else:
-        sock.send(f"PRIVMSG {CHANNEL} :{message}\r\n".encode("utf-8"))
-    log.info(f"[MedlarTV→Twitch] {message}")
-
-
-def handle_command(sock, username, message, msg_id=None, badges=None):
-    """
-    Handle ! commands from chat with flexible role-based permissions.
-    NOTE: Fixed the translation path to pass the actual '<lang> <text>' tail.
-    """
-    parts = message.split()
-    cmd = parts[0][1:].lower()
-    args = " ".join(parts[1:]) if len(parts) > 1 else ""
-
-    if cmd not in COMMANDS:
-        # Still allow our custom '!tlang' even if not in commands.yaml
-        if cmd == "tlang":
-            send_reply(sock, get_supported_languages_list(), msg_id)
-            return True
-        return False
-
-    cmd_config = COMMANDS[cmd]
-
-    has_permission, denial_reason = check_command_permission(username, cmd_config, badges)
-    if not has_permission:
-        send_reply(sock, f"@{username} ❌ {denial_reason}", msg_id)
-        log.info(f"[Command] {username} denied access to !{cmd}: {denial_reason}")
+    data = _load_copilots()
+    active = data.setdefault("copilots", {}).setdefault("active", [])
+    history = data["copilots"].setdefault("history", [])
+    uname = username
+    if uname.lower() not in [u.lower() for u in active]:
+        active.append(uname)
+        history.append({"action": "add", "user": uname, "ts": time.time()})
+        _save_copilots(data)
         return True
-
-    # --- SPECIAL: Translation commands (fixed) ---
-    if cmd in ["t", "translate", "trans"]:
-        # IMPORTANT: pass the *tail after the command* exactly as typed
-        raw_after_cmd = args  # everything after '!t'
-        if not raw_after_cmd:
-            send_reply(sock, "!t <lang> <text> | Example: !t jp Hello!  use !tlang to see supported languages", msg_id)
-            return True
-
-        response = handle_translate_command(raw_after_cmd, username)
-        send_reply(sock, response, msg_id)
-        log_command(username, f"!{cmd}", success=True)
-        return True
-
-    # --- built-in helper: '!tlang' if present in commands.yaml ---
-    if cmd == "tlang":
-        send_reply(sock, get_supported_languages_list(), msg_id)
-        log_command(username, "!tlang", success=True)
-        return True
-
-    # --- existing generic responses / other specials ---
-    response = cmd_config.get("response", "")
-    formatted_user = format_username(username)
-    response = response.replace("{user}", formatted_user).replace("{nick}", NICK)
-
-    if cmd == "moodnumbers":
-        from MedlarTV.core.memory import load_memory
-        data = load_memory()
-        moods = data["personality_memory"]["mood_weights"]
-        response = f"{formatted_user} 📊 Mood Stats: " + " | ".join([f"{m}: {v}" for m, v in moods.items()])
-
-    elif cmd == "mood":
-        response = f"{formatted_user} Current mood: {current_mood} {MOODS.get(current_mood, {}).get('emoji', [''])[0]}"
-
-    elif cmd == "addcopilot":
-        if len(parts) < 2:
-            response = f"{formatted_user} Usage: !addcopilot username"
-        else:
-            target = parts[1].lstrip("@").lower()
-            if add_copilot(target):
-                response = response.replace("{target}", target)
-            else:
-                response = f"{formatted_user} {target} is already a Co-Pilot!"
-
-    elif cmd == "removecopilot":
-        if len(parts) < 2:
-            response = f"{formatted_user} Usage: !removecopilot username"
-        else:
-            target = parts[1].lstrip("@").lower()
-            if remove_copilot(target):
-                response = response.replace("{target}", target)
-            else:
-                response = f"{formatted_user} {target} is not a Co-Pilot!"
-
-    elif cmd == "listcopilots":
-        if CO_PILOTS:
-            copilot_list = ", ".join(sorted(CO_PILOTS))
-            response = response.replace("{copilots}", copilot_list)
-        else:
-            response = f"{formatted_user} No active Co-Pilots."
-
-    send_reply(sock, response, msg_id)
-    return True
-
-def should_respond_to_message(username, message):
-    """Determine if MedlarTV should respond to this message."""
-    msg_lower = message.lower()
-    
-    # Use fuzzy trigger detection
-    if fuzzy_should_respond(message, strict=False):
-        return True
-    
-    # Respond to @mentions
-    if f"@{NICK.lower()}" in msg_lower:
-        return True
-    
-    # Respond to questions directed at bot
-    if "?" in message and fuzzy_should_respond(message, strict=True):
-        return True
-    
     return False
 
-def detect_mood_from_message(message: str):
-    """Detect if message content should trigger a mood change automatically."""
-    msg_lower = message.lower()
-    if any(word in msg_lower for word in ["hype", "let's go", "pog", "fire", "woo"]):
-        return "hype"
-    if any(word in msg_lower for word in ["chill", "relax", "vibe", "calm", "cozy"]):
-        return "chill"
-    if any(word in msg_lower for word in ["lol", "lmao", "rofl", "bruh", "funny"]):
-        return "snarky"
-    if any(word in msg_lower for word in ["sad", "help", "aww", "sorry", "ouch"]):
-        return "supportive"
-    return None
-
-def get_llm_response(username, message):
-    """Get AI response from the Core API."""
-    try:
-        # Pass the formatted role instead of raw username
-        role = get_user_role(username)
-        sender = format_username(username) if role != "user" else username
-        
-        response = requests.post(
-            f"{CORE_URL}/chat",
-            json={"prompt": message, "sender": sender},
-            timeout=10
-        )
-        
-        if response.status_code == 200:
-            data = response.json()
-            reply = data.get("reply", "")
-            
-            # Limit response to 500 characters (Twitch message limit)
-            if len(reply) > 500:
-                reply = reply[:497] + "..."
-                log.warning(f"[LLM] Response truncated to 500 chars")
-            
-            return reply
-        else:
-            log.error(f"[Core] API returned {response.status_code}")
-            return None
-            
-    except requests.exceptions.Timeout:
-        log.error("[Core] Request timed out")
-        return None
-    except Exception as e:
-        log.error(f"[Core] Error getting LLM response: {e}")
-        return None
-
-def format_reply_with_mood(reply):
-    """Add mood-based styling to reply."""
-    style = STYLE_PROFILES.get(current_mood, {})
-    prefix = style.get("prefix", "")
-    suffix = style.get("suffix", "")
-    
-    # Don't double-add styling if it's already there
-    if prefix and not reply.startswith(prefix):
-        reply = f"{prefix} {reply}"
-    if suffix and not reply.endswith(suffix):
-        reply = f"{reply} {suffix}"
-    
-    return reply
-
-# --- NETWORK FUNCTIONS ---
-def connect():
-    """Connect to Twitch IRC and join all relevant channels."""
-    global SOCKET
-    
-    sock = socket.socket()
-    sock.connect((SERVER, PORT))
-    sock.send(f"PASS {TOKEN}\r\n".encode("utf-8"))
-    sock.send(f"NICK {NICK}\r\n".encode("utf-8"))
-
-    sock.send(b"CAP REQ :twitch.tv/tags\r\n")
-    sock.send(b"CAP REQ :twitch.tv/commands\r\n")
-    sock.send(b"CAP REQ :twitch.tv/membership\r\n")
-
-    # Join main channel (Pilot's channel)
-    sock.send(f"JOIN {CHANNEL}\r\n".encode("utf-8"))
-    log.info(f"Connected to {CHANNEL} as {NICK} (Pilot: {PILOT})")
-
-    # Store socket globally first so add_copilot can use it
-    SOCKET = sock
-
-    # Join all co-pilot channels
-    for copilot in CO_PILOTS:
-        copilot_channel = f"#{copilot}"
-        sock.send(f"JOIN {copilot_channel}\r\n".encode("utf-8"))
-        log.info(f"Joined Co-Pilot channel: {copilot_channel}")
-
-        # Register each co-pilot channel with bridge
-        try:
-            register_channel(copilot_channel)
-            log.info(f"Registered with bridge: {copilot_channel}")
-        except Exception as e:
-            log.warning(f"[Bridge] Failed to register {copilot_channel}: {e}")
-
-    # Register main channel with bridge
-    for attempt in range(3):
-        try:
-            register_channel(CHANNEL)
-            log.info("[Bridge] Main channel registered successfully")
+def _remove_copilot(username: str) -> bool:
+    username = username.strip()
+    if not username:
+        return False
+    data = _load_copilots()
+    active = data.setdefault("copilots", {}).setdefault("active", [])
+    history = data["copilots"].setdefault("history", [])
+    idx = None
+    for i, u in enumerate(active):
+        if u.lower() == username.lower():
+            idx = i
             break
-        except Exception as e:
-            log.warning(f"[Bridge] register_channel failed (try {attempt+1}/3): {e}")
-            time.sleep(1)
+    if idx is not None:
+        removed = active.pop(idx)
+        history.append({"action": "remove", "user": removed, "ts": time.time()})
+        _save_copilots(data)
+        return True
+    return False
 
-    return sock
+# ----------------------------------------------------------------------------
+# IRC CLIENT CLASS
+# ----------------------------------------------------------------------------
 
-def listen(sock):
-    log.info("Listening for Twitch chat messages...")
+class TwitchIRC:
+    def __init__(self):
+        self.sock: Optional[socket.socket] = None
+        self.connected: bool = False
+        self.stop_flag: bool = False
 
-    ignored_users = {
-        "streamelements", "streamlabs", "nightbot", "moobot",
-        "fossabot", "ignitionrage", "soundalerts"
-    }
-    if NICK:
-        ignored_users.add(NICK.lower())
+    # ---------------------------- CONNECT ----------------------------
+    def connect(self):
+        log.info("[IRC] Connecting to Twitch IRC…")
+        base_sock = socket.socket()
+        self.sock = ssl.wrap_socket(base_sock)
+        self.sock.connect((TWITCH_SERVER, TWITCH_PORT))
 
-    while True:
-        try:
-            resp = sock.recv(4096).decode("utf-8", errors="ignore")
-        except Exception as e:
-            log.error(f"[Socket] recv failed: {e}")
-            log_error("socket_error", str(e))
-            break
+        # Login
+        self._send_raw(f"PASS {IRC_TOKEN}")
+        self._send_raw(f"NICK {BOT_NICK}")
+        self._send_raw(f"JOIN {CHANNEL}")
+        self._send_raw("CAP REQ :twitch.tv/commands twitch.tv/tags twitch.tv/membership")
 
-        if resp.startswith("PING"):
-            sock.send(b"PONG :tmi.twitch.tv\r\n")
-            continue
+        self.connected = True
+        log.info(f"[IRC] Connected as {BOT_NICK} to {CHANNEL}")
 
-        if not resp.strip():
-            continue
+    # ------------------------------------------------------------------
+    def _send_raw(self, text: str):
+        if not self.sock:
+            return
+        self.sock.send((text + "\r\n").encode("utf-8"))
 
-        # Detect Twitch events FIRST (before tags parsing)
-        raid_info = detect_raid(resp)
+    def send_message(self, msg: str):
+        if not self.connected:
+            return
+        self._send_raw(f"PRIVMSG {CHANNEL} :{msg}")
+
+    # ------------------------------ LOOP ------------------------------
+    def listen(self):
+        buffer = ""
+        while not self.stop_flag:
+            try:
+                if not self.sock:
+                    break
+
+                data = self.sock.recv(2048).decode("utf-8", errors="ignore")
+                if not data:
+                    continue
+
+                buffer += data
+                lines = buffer.split("\r\n")
+                buffer = lines.pop()
+
+                for line in lines:
+                    self._handle_raw_message(line)
+
+            except Exception as e:
+                log.error(f"[IRC] Error: {e}")
+                time.sleep(1)
+
+    def stop(self):
+        self.stop_flag = True
+        self.connected = False
+        if self.sock:
+            self.sock.close()
+
+    # ------------------------------------------------------------------
+    def _handle_raw_message(self, line: str):
+        if line.startswith("PING"):
+            self._send_raw("PONG :tmi.twitch.tv")
+            return
+
+        # PRIVMSG, USERNOTICE, JOIN/PART events etc.
+        self._process_incoming(line)
+
+    # ------------------------------------------------------------------
+    def _process_incoming(self, raw: str):
+        # Parse tags & username
+        tags, username, message = self._parse_message(raw)
+        log.debug(f"[DEBUG] RAW PARSED: user={username}, msg={message}, raw={raw}")
+
+        if username is None or message is None:
+            return
+
+        ctx: Dict[str, Any] = {
+            "bot_nick": BOT_NICK,
+            "socket_connected": self.connected,
+            "bridge_connected": False,
+            "message_timestamp": time.time(),
+        }
+
+        # ------------------ EVENT DETECTION ------------------
+
+        # Raid
+        raid_info = detect_raid(raw)
         if raid_info:
-            response = get_raid_response(raid_info)
-            send_reply(sock, response)
-            log_interaction("SYSTEM", "raid", response, current_mood, "en", metadata=raid_info)
-            continue
+            self.send_message(
+                f"⚡ RAID from {raid_info['raider']} with {raid_info['viewer_count']} viewers!"
+            )
+            return
 
-        sub_info = detect_subscription(resp)
+        # Sub, resub, gift
+        sub_info = detect_subscription(raw)
         if sub_info:
-            response = get_sub_response(sub_info)
-            send_reply(sock, response)
-            log_interaction("SYSTEM", "subscription", response, current_mood, "en", metadata=sub_info)
-            continue
+            from MedlarTV.core.twitch_events import get_sub_response
+            self.send_message(get_sub_response(sub_info))
+            return
 
-        points_info = detect_channel_point_redemption(resp)
-        if points_info:
-            response = get_channel_point_response(points_info)
-            send_reply(sock, response)
-            log_interaction("SYSTEM", "channel_points", response, current_mood, "en", metadata=points_info)
-            continue
+        # Channel points
+        redeem = detect_channel_point_redemption(raw)
+        if redeem:
+            from MedlarTV.core.twitch_events import get_channel_point_response
+            self.send_message(get_channel_point_response(redeem))
+            return
 
-        bits_info = detect_bits(resp)
-        if bits_info:
-            response = get_bits_response(bits_info)
-            send_reply(sock, response)
-            log_interaction("SYSTEM", "bits", response, current_mood, "en", metadata=bits_info)
-            continue
+        # Bits
+        bits = detect_bits(raw)
+        if bits:
+            self.send_message(f"💎 {bits['user']} cheered {bits['amount']} bits!")
+            return
 
-        # Parse IRC tags (existing code)
-        tags = {}
-        raw = resp
-        if raw.startswith("@"):
-            try:
-                tag_str, resp = raw.split(" ", 1)
-                for tag in tag_str[1:].split(";"):
-                    if "=" in tag:
-                        k, v = tag.split("=", 1)
+        # ------------------ CHAT MESSAGE ------------------
+
+        if message.startswith("!"):
+            self._handle_command(username, message, ctx, tags)
+        else:
+            self._handle_regular_message(username, message, ctx, tags)
+
+    # ----------------------------------------------------------------------------
+    def _parse_message(self, raw: str):
+        # Twitch IRC with tags
+        # Format: @tags :username!something PRIVMSG #chan :message
+        try:
+            tags = {}
+            username = None
+            message = None
+
+            if raw.startswith("@"):  # has tags
+                tag_str, rest = raw[1:].split(" ", 1)
+                for t in tag_str.split(";"):
+                    if "=" in t:
+                        k, v = t.split("=", 1)
                         tags[k] = v
-            except Exception as e:
-                log.warning(f"[Tags] parse failed: {e}")
-                resp = raw
+                raw = rest
 
-        msg_id = tags.get("id")
-        reply_parent_msg_id = tags.get("reply-parent-msg-id")
+            if "PRIVMSG" in raw:
+                parts = raw.split("PRIVMSG", 1)
+                prefix = parts[0]
+                msg_part = parts[1]
 
-        # Auto mood detection (existing code)
-        msg_lower = resp.lower()
-        detected_mood = None
-        if "hype" in msg_lower or "let's go" in msg_lower or "pog" in msg_lower:
-            detected_mood = "hype"
-        elif "chill" in msg_lower or "relax" in msg_lower or "vibe" in msg_lower:
-            detected_mood = "chill"
-        elif "lol" in msg_lower or "lmao" in msg_lower or "bruh" in msg_lower:
-            detected_mood = "snarky"
-        elif "sad" in msg_lower or "help" in msg_lower or "aww" in msg_lower:
-            detected_mood = "supportive"
-        
-        if detected_mood:
-            old_mood = current_mood
-            switch_mood(detected_mood, auto=True)
-            log_mood_change(old_mood, detected_mood, "keyword")
+                # Extract username
+                if "!" in prefix:
+                    username = prefix.split("!", 1)[0].lstrip(":")
 
-        # Process PRIVMSG (actual chat messages)
-        if "PRIVMSG" in resp and "!" in resp:
-            try:
-                # ⭐ NEW: Extract badges from tags (simple inline method)
-                badges = {}
-                if "badges=" in resp:
-                    try:
-                        badges_str = resp.split("badges=")[1].split(";")[0]
-                        if badges_str:
-                            for badge in badges_str.split(","):
-                                if "/" in badge:
-                                    badge_name, badge_version = badge.split("/", 1)
-                                    badges[badge_name] = badge_version
-                    except Exception as e:
-                        log.warning(f"[Badges] Failed to parse: {e}")
-                
-                username = resp.split("!", 1)[0][1:].lower()
-                if username in ignored_users:
-                    continue
+                # Extract message
+                if " :" in msg_part:
+                    message = msg_part.split(" :", 1)[1]
 
-                message = resp.split("PRIVMSG", 1)[1].split(":", 1)[1].strip()
-                
-                # ⭐ UPDATED: Get user role WITH badges
-                role = get_user_role(username, badges)
-                role_tag = {
-                    "pilot": "[PILOT]",
-                    "mod": "[MOD]",
-                    "copilot": "[CO-PILOT]",
-                    "vip": "[VIP]",
-                    "user": ""
-                }.get(role, "")
-                log.info(f"[Twitch→Core] {role_tag} {username}: {message}")
+            return tags, username, message
 
-                # Detect language
-                detected_language = detect_language(message)
+        except Exception:
+            return {}, None, None
 
-                # Store message in recent history
+    # ------------------- REGULAR CHAT ----------------------
+    def _handle_regular_message(self, username: str, msg: str, ctx: Dict[str, Any], tags: Dict[str, Any]):
+        log.debug(f"[DEBUG] Incoming chat: @{username}: {msg}")
+
+        # Auto-moderation
+        result = check_message(username, msg, tags)
+        if not result["is_allowed"]:
+            action = result.get("action")
+            duration = result.get("duration", 0)
+            reason = result.get("reason", "violation")
+
+            if action == "timeout":
+                execute_timeout(self.sock, CHANNEL, username, duration, reason)
+            elif action == "ban":
+                execute_ban(self.sock, CHANNEL, username, reason)
+            elif action == "delete":
+                msg_id = result.get("msg_id")
                 if msg_id:
-                    recent_msgs[msg_id] = {"user": username, "message": message}
-                    if len(recent_msgs) > 80:
-                        oldest = next(iter(recent_msgs))
-                        recent_msgs.pop(oldest, None)
+                    execute_delete(self.sock, CHANNEL, msg_id)
+            elif action == "warn":
+                self.send_message(f"@{username} ⚠️ {reason}")
+            return
 
-                # Check moderation FIRST
-                mod_check = check_message(username, message, role)
-                if not mod_check["is_allowed"]:
-                    log.warning(f"[Mod] Blocked message from {username}: {mod_check['reason']}")
-                    
-                    if mod_check["action"] == "timeout":
-                        execute_timeout(sock, CHANNEL, username, mod_check.get("duration", 60), mod_check["reason"])
-                    elif mod_check["action"] == "delete":
-                        execute_delete(sock, CHANNEL, msg_id)
-                    elif mod_check["action"] == "warn":
-                        send_reply(sock, f"@{username} {mod_check['reason']}. Please follow chat rules.")
-                    
-                    continue
+        # ------------------------------------------
+        # Fuzzy-triggered Medlar response (IMPORTANT)
+        # ------------------------------------------
 
-                # Handle mod commands
-                if is_mod_command(message):
-                    mod_response = handle_mod_command(sock, CHANNEL, username, message, role)
-                    if mod_response:
-                        send_reply(sock, mod_response, msg_id)
-                        log_command(username, message.split()[0], success=True)
-                    continue
+        log.debug(f"[DEBUG] Running should_respond() for msg='{msg}'")
 
-                # Handle regular commands
-                if message.startswith("!"):
-                    # ⭐ NEW: Try flexible permission commands first (with badges)
-                    if handle_command(sock, username, message, msg_id, badges):
-                        log_command(username, message.split()[0], success=True)
-                        continue
-                    
-                    # Stream management commands (fallback for special commands)
-                    if message.lower().startswith("!streaminfo"):
-                        stream_info = get_stream_info()
-                        response = format_stream_info(stream_info)
-                        send_reply(sock, response, msg_id)
-                        log_command(username, "!streaminfo", success=True)
-                        continue
-                    
-                    elif message.lower().startswith("!title") and role in ["pilot", "copilot"]:
-                        parts = message.split(maxsplit=1)
-                        if len(parts) > 1:
-                            new_title = parts[1]
-                            if update_stream_title(new_title):
-                                send_reply(sock, f"@{username} Stream title updated!", msg_id)
-                            else:
-                                send_reply(sock, f"@{username} Failed to update title.", msg_id)
-                        else:
-                            channel_info = get_channel_info()
-                            if channel_info:
-                                send_reply(sock, f"Current title: {channel_info['title']}", msg_id)
-                        log_command(username, "!title", success=True)
-                        continue
-                    
-                    elif message.lower().startswith("!game") and role in ["pilot", "copilot"]:
-                        parts = message.split(maxsplit=1)
-                        if len(parts) > 1:
-                            new_game = parts[1]
-                            if update_stream_category(new_game):
-                                send_reply(sock, f"@{username} Category updated to {new_game}!", msg_id)
-                            else:
-                                send_reply(sock, f"@{username} Failed to update category.", msg_id)
-                        else:
-                            channel_info = get_channel_info()
-                            if channel_info:
-                                send_reply(sock, f"Current game: {channel_info['game_name']}", msg_id)
-                        log_command(username, "!game", success=True)
-                        continue
+        decision = should_respond(msg)
 
-                # Check if we should respond to this message
-                if not should_respond_to_message(username, message):
-                    mood = detect_mood_from_message(message)
-                    if mood:
-                        old_mood = current_mood
-                        switch_mood(mood, auto=True)
-                        log_mood_change(old_mood, mood, "auto")
-                    continue
+        log.debug(f"[DEBUG] should_respond() returned: {decision}")
 
-                # Rate limiting
-                if not can_reply():
-                    log.info("[Cooldown] Skipping reply (rate limited)")
-                    continue
+        if decision:
+            log.debug(
+                f"[DEBUG] Calling generate_response(user={username}, msg={msg})"
+            )
 
-                # Try smart template response first
-                template_response = get_smart_response(message, username, current_mood)
-                
-                if template_response:
-                    # Add language indicator if needed
-                    if detected_language != "en":
-                        template_response = add_language_indicator(template_response, detected_language)
-                    
-                    send_reply(sock, template_response, msg_id)
-                    log_interaction(username, message, template_response, current_mood, detected_language)
-                    continue
+            reply = generate_response(msg, username)
 
-                # Check if user wants all caps mode
-                if should_enable_all_caps(message):
-                    log.info(f"[Filter] All caps mode activated by {username}")
+            log.debug(f"[DEBUG] generate_response() output: {reply}")
 
-                # Get LLM response
-                log.info(f"[LLM] Generating response for {username}...")
-                llm_reply = get_llm_response(username, message)
-                
-                if not llm_reply:
-                    log.warning("[LLM] No response generated")
-                    log_error("llm_no_response", f"Failed for {username}: {message}")
-                    continue
+            if reply:
+                self.send_message(_prepare_msg(_role_prefix(username) + reply))
 
-                # Apply content filter
-                is_safe, filtered_reply, reason = filter_message(llm_reply, username)
-                
-                if not is_safe:
-                    log.warning(f"[Filter] Response blocked: {reason}")
-                    safe_reply = get_safety_response()
-                    send_reply(sock, safe_reply, msg_id if reply_parent_msg_id else None)
-                    log_interaction(username, message, safe_reply, current_mood, detected_language)
-                    continue
+    # ------------------- COMMAND HANDLING ----------------------
+    def _handle_command(self, username: str, full: str, ctx: Dict[str, Any], tags: Dict[str, Any]):
+        parts = full.split(" ", 1)
+        cmd = parts[0].lstrip("!").lower()
+        args = parts[1] if len(parts) > 1 else ""
 
-                # Format with mood styling
-                formatted_reply = format_reply_with_mood(filtered_reply)
-                
-                # Add language indicator
-                if detected_language != "en":
-                    formatted_reply = add_language_indicator(formatted_reply, detected_language)
-                
-                # Send the filtered reply
-                send_reply(sock, formatted_reply, msg_id if reply_parent_msg_id else None)
+        # Determine role
+        role = "user"
+        if tags.get("mod") == "1":
+            role = "mod"
+        if username.lower() == CHANNEL.lstrip("#").lower():
+            role = "pilot"
+        if tags.get("vip") == "1":
+            role = "vip"
 
-                # Log the interaction
-                log_interaction(username, message, formatted_reply, current_mood, detected_language)
+        if role not in {"pilot", "mod"}:
+            try:
+                if username.lower() in [u.lower() for u in _get_active_copilots()]:
+                    role = "copilot"
+            except Exception:
+                pass
 
-            except Exception as e:
-                log.error(f"[Handler] Failed to process message: {e}")
-                log_error("message_handler", str(e), {"username": username, "message": message})
-                import traceback
-                traceback.print_exc()
+        if cmd in {"addcopilot", "removecopilot", "listcopilots"}:
+            if cmd == "addcopilot":
+                target = args.strip().split(" ")[0] if args.strip() else ""
+                if role not in {"pilot", "mod"}:
+                    self.send_message(f"@{username} ❌ Only Broadcaster and Mods can add co-pilots.")
+                    return
+                if not target:
+                    self.send_message(f"@{username} ❌ Usage: !addcopilot <username>")
+                    return
+                ok = _add_copilot(target)
+                if ok:
+                    self.send_message(f"Co-Pilot {target} registered! Welcome to the squad! 🚀")
+                else:
+                    self.send_message(f"@{username} ⚠️ {target} is already a Co-Pilot.")
+                return
+            if cmd == "removecopilot":
+                target = args.strip().split(" ")[0] if args.strip() else ""
+                if role not in {"pilot", "mod", "copilot"}:
+                    self.send_message(f"@{username} ❌ Only Broadcaster, Mods, or Co-Pilots can remove co-pilots.")
+                    return
+                if not target:
+                    self.send_message(f"@{username} ❌ Usage: !removecopilot <username>")
+                    return
+                ok = _remove_copilot(target)
+                if ok:
+                    self.send_message(f"Co-Pilot {target} unregistered. Thanks for flying with us! o7")
+                else:
+                    self.send_message(f"@{username} ⚠️ {target} is not currently a Co-Pilot.")
+                return
+            if cmd == "listcopilots":
+                names = _get_active_copilots()
+                listing = ", ".join(names) if names else "none"
+                self.send_message(f"Active Co-Pilots: {listing}")
+                return
 
-def cleanup_and_exit(sock):
-    """Send goodbye message and close socket cleanly."""
-    try:
-        goodbye = "🌙 MedlarTV going offline. Systems entering standby mode."
-        sock.send(f"PRIVMSG {CHANNEL} :{goodbye}\r\n".encode("utf-8"))
-        time.sleep(0.5)
-    except:
-        pass
-    finally:
-        sock.close()
-        log.info("Connection closed cleanly")
+        response = execute_command(cmd, username, role, args, ctx)
+
+        if response:
+            self.send_message(_prepare_msg(_role_prefix(username) + response))
+        else:
+            log.debug(
+                f"[DEBUG] Command fallback to generate_response(user={username}, msg={full})"
+            )
+            reply = generate_response(full, username)
+            log.debug(f"[DEBUG] generate_response() command output: {reply}")
+            if reply:
+                self.send_message(_prepare_msg(_role_prefix(username) + reply))
 
 
-# --- ENTRYPOINT ---
-if __name__ == "__main__":
-    try:
-        load_config()
-        current_mood = get_dominant_weighted_mood()
-        log.info(f"Starting with learned default mood: {current_mood}")
-        log.info(f"Pilot: {PILOT}")
-        log.info(f"Co-Pilots: {', '.join(CO_PILOTS) if CO_PILOTS else 'none'}")
-        s = connect()
-        listen(s)
-    except KeyboardInterrupt:
-        log.info("\n⚡ MedlarTV Twitch listener stopped manually.")
-        cleanup_and_exit(s)
-    except Exception as e:
-        log.error(f"Fatal error: {e}")
-        import traceback
-        traceback.print_exc()
-        raise
+# ----------------------------------------------------------------------------
+# THREAD CONTROL
+# ----------------------------------------------------------------------------
+
+_listener_instance: Optional[TwitchIRC] = None
+_listener_thread: Optional[threading.Thread] = None
+
+
+def start_listener():
+    global _listener_instance, _listener_thread
+
+    if _listener_instance and _listener_instance.connected:
+        log.info("[Listener] Already running.")
+        return
+
+    _listener_instance = TwitchIRC()
+    _listener_instance.connect()
+
+    _listener_thread = threading.Thread(target=_listener_instance.listen, daemon=True)
+    _listener_thread.start()
+
+    log.info("[Listener] Twitch listener started.")
+
+
+def stop_listener():
+    global _listener_instance
+    if _listener_instance:
+        _listener_instance.stop()
+        log.info("[Listener] Stopped.")
+
