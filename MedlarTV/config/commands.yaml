@@ -166,6 +166,10 @@ commands:
     allowed_roles: ["pilot", "mod"]
     description: "View moderation statistics"
 
+  test:
+    response: "Test command"
+    allowed_roles: ["pilot", "mod"]
+    description: "Test command"
 # ============================================================================
 # PERMISSION LEVELS EXPLAINED
 # ============================================================================

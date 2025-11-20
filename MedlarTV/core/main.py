@@ -281,8 +281,6 @@ def main():
     initialize_systems()
     print("[DEBUG main] initialize_systems() completed")
 
-    
-
     print("[DEBUG main] calling start_listener()")
     start_listener()
     print("[DEBUG main] start_listener() returned")
