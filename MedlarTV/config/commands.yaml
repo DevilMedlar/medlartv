@@ -20,18 +20,10 @@ commands:
     response: "Medlar mode engaged, {user} 😈"
     allowed_roles: ["everybody"]
   
-  help:
-    response: "📋 Available commands: !ping, !status, !hello, !hype, !medlar, !mood, !emotion, !emotions, !feelstate, !t, !tlang, !thelp, !listcopilots, !streaminfo, !help, !commands"
-    allowed_roles: ["everybody"]
-
-  modhelp:
-    response: "🛡️ Mod commands: !moodnumbers, !resetemotions, !addcopilot, !removecopilot, !timeout, !ban, !warn, !unwarn, !whitelist, !modstats, !modhelp, !title, !game"
-    allowed_roles: ["pilot", "mod"]
-
   commands:
-    response: "📋 Available commands: !ping, !status, !hello, !hype, !medlar, !mood, !emotion, !emotions, !feelstate, !t, !tlang, !thelp, !listcopilots, !streaminfo, !title, !game, !help, !commands"
+    response: "📋 Command catalog: https://DevilMedlar.github.io/medlar-commands-site/"
     allowed_roles: ["everybody"]
-    description: "Show all available commands"
+    description: "Link to the command catalog"
 
   # MOOD & EMOTION COMMANDS
   mood:
@@ -69,28 +61,10 @@ commands:
     description: "Translate text to another language"
     usage: "!t <lang> <text> | Example: !t jp Hello!"
   
-  translate:
-    response: "Translating..."
-    allowed_roles: ["everybody"]
-    description: "Alias for !t command"
-  
-  trans:
-    response: "Translating..."
-    allowed_roles: ["everybody"]
-    description: "Short alias for translate"
-  
   tlang:
     response: "Supported languages: jp/ja (🇯🇵), kr/ko (🇰🇷), cn/zh (🇨🇳), sp/es (🇪🇸), fr (🇫🇷), de (🇩🇪), pt (🇵🇹), ru (🇷🇺), it (🇮🇹)"
     allowed_roles: ["everybody"]
     description: "Show supported translation languages"
-  
-  translatelangs:
-    response: "Supported languages: jp/ja (🇯🇵), kr/ko (🇰🇷), cn/zh (🇨🇳), sp/es (🇪🇸), fr (🇫🇷), de (🇩🇪), pt (🇵🇹), ru (🇷🇺), it (🇮🇹)"
-    allowed_roles: ["everybody"]
-  
-  languages:
-    response: "Supported languages: jp/ja (🇯🇵), kr/ko (🇰🇷), cn/zh (🇨🇳), sp/es (🇪🇸), fr (🇫🇷), de (🇩🇪), pt (🇵🇹), ru (🇷🇺), it (🇮🇹)"
-    allowed_roles: ["everybody"]
   
   thelp:
     response: "!t <lang> <text> | Example: !t jp Hello!  use !tlang to see supported languages"

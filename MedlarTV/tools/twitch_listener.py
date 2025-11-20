@@ -52,7 +52,7 @@ _COPILOTS_FILE = Path(__file__).resolve().parents[1] / "config" / "copilots.yaml
 
 def _ensure_copilots_file() -> None:
     if not _COPILOTS_FILE.exists():
-        data = {"copilots": {"active": [], "history": []}}
+        data = {"copilots": {"active": []}}
         _COPILOTS_FILE.parent.mkdir(parents=True, exist_ok=True)
         with _COPILOTS_FILE.open("w", encoding="utf-8") as f:
             yaml.safe_dump(data, f)
@@ -64,7 +64,7 @@ def _load_copilots() -> Dict[str, Any]:
             data = yaml.safe_load(f) or {}
             return data
     except Exception:
-        return {"copilots": {"active": [], "history": []}}
+        return {"copilots": {"active": []}}
 
 def _save_copilots(data: Dict[str, Any]) -> None:
     _COPILOTS_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -98,12 +98,12 @@ def _add_copilot(username: str) -> bool:
         return False
     data = _load_copilots()
     active = data.setdefault("copilots", {}).setdefault("active", [])
-    history = data["copilots"].setdefault("history", [])
     uname = username
     if uname.lower() not in [u.lower() for u in active]:
         active.append(uname)
-        history.append({"action": "add", "user": uname, "ts": time.time()})
-        _save_copilots(data)
+        # Persist active list only; write event to logs
+        _save_copilots({"copilots": {"active": active}})
+        log.info("[Copilot] add user=%s ts=%f", uname, time.time())
         return True
     return False
 
@@ -113,7 +113,6 @@ def _remove_copilot(username: str) -> bool:
         return False
     data = _load_copilots()
     active = data.setdefault("copilots", {}).setdefault("active", [])
-    history = data["copilots"].setdefault("history", [])
     idx = None
     for i, u in enumerate(active):
         if u.lower() == username.lower():
@@ -121,8 +120,9 @@ def _remove_copilot(username: str) -> bool:
             break
     if idx is not None:
         removed = active.pop(idx)
-        history.append({"action": "remove", "user": removed, "ts": time.time()})
-        _save_copilots(data)
+        # Persist active list only; write event to logs
+        _save_copilots({"copilots": {"active": active}})
+        log.info("[Copilot] remove user=%s ts=%f", removed, time.time())
         return True
     return False
 
