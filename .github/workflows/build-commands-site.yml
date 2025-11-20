@@ -1,0 +1,24 @@
+name: Update Commands Site
+
+on:
+  push:
+    paths:
+      - MedlarTV/config/commands.yaml
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install pyyaml
+      - run: python MedlarTV/tools/build_commands_site.py --out docs
+      - run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add docs
+          if git diff --cached --quiet; then echo "No changes"; else git commit -m "Update commands site"; fi
+          git push

@@ -281,9 +281,7 @@ def main():
     initialize_systems()
     print("[DEBUG main] initialize_systems() completed")
 
-    print("[DEBUG main] starting commands web server…")
-    start_commands_web()
-    print("[DEBUG main] commands web server started")
+    
 
     print("[DEBUG main] calling start_listener()")
     start_listener()
