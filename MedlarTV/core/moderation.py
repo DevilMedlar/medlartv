@@ -131,6 +131,12 @@ def is_mod_command(message: str) -> bool:
     m = message.strip().lower()
     return m.startswith("!timeout") or m.startswith("!ban") or m.startswith("!warn") or m.startswith("!unwarn")
 
+def execute_shoutout(sock, channel: str, target_username: str) -> None:
+    if not sock:
+        return
+    cmd = f"PRIVMSG {channel} :/shoutout {target_username}".strip()
+    sock.send((cmd + "\r\n").encode("utf-8"))
+
 def handle_mod_command(message: str) -> Optional[Dict[str, Any]]:
     m = message.strip()
     parts = m.split()

@@ -29,6 +29,7 @@ import logging
 import time
 from pathlib import Path
 from typing import Dict, Any, Optional, Tuple
+from MedlarTV.core.interaction_logger import log_mood_change
 
 import yaml  # type: ignore
 
@@ -226,18 +227,20 @@ def _load_emotion_config() -> Dict[str, Dict[str, Any]]:
 
     emotions_section = data.get("emotions")
     if not isinstance(emotions_section, dict):
-        # Legacy format: maybe it's just a simple mapping name->value
-        # In that case, treat those as baselines.
         if isinstance(data, dict):
             for name, baseline in data.items():
                 try:
                     b = float(baseline)
                 except Exception:
                     continue
-                if name not in config:
-                    config[name] = {"baseline": b, "decay": DEFAULT_DECAY}
-                else:
-                    config[name]["baseline"] = b
+                if b < 0.0 or b > 1.0:
+                    continue
+                if name in ("last_update", "timestamp"):
+                    continue
+                cfg = config.get(name, {"baseline": b, "decay": DEFAULT_DECAY})
+                cfg["baseline"] = b
+                cfg.setdefault("decay", DEFAULT_DECAY)
+                config[name] = cfg
         return config
 
     for name, info in emotions_section.items():
@@ -533,6 +536,7 @@ class EmotionalSystem:
         """
         print(f"[DEBUG emotions] process_message() called with message='{message}' username={username}")
 
+        prev_dom = self.get_dominant_emotion()
         # 1) Decay toward baseline first
         self.apply_decay()
         print(f"[DEBUG emotions] After decay: {self._emotions}")
@@ -565,6 +569,13 @@ class EmotionalSystem:
 
         snapshot = self.emotions
         print(f"[DEBUG emotions] Final snapshot returned: {snapshot}")
+
+        try:
+            new_dom = self.get_dominant_emotion()
+            if new_dom and prev_dom and new_dom != prev_dom:
+                log_mood_change(prev_dom, new_dom, "chat", {"severity": severity})
+        except Exception:
+            pass
 
         return {
             "sentiment": sentiment,

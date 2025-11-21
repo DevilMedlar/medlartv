@@ -257,6 +257,70 @@ def get_stream_info() -> Optional[Dict[str, Any]]:
     print(f"[DEBUG stream_management] /streams returned {len(items)} records")
     return items[0] if items else None
 
+# --- USER LOOKUP & SHOUTOUT -------------------------------------------------
+
+def get_user_id(login: str) -> Optional[str]:
+    """Resolve a user's numeric id by login using APP token."""
+    print(f"[DEBUG stream_management] get_user_id() called login={login!r}")
+    token = _ensure_app_token()
+    print(f"[DEBUG stream_management] get_user_id() token_set={bool(token)}")
+    if not token:
+        return None
+    headers = _app_headers(token)
+    params = {"login": login}
+    print(f"[DEBUG stream_management] Requesting /users for login={login!r}")
+    try:
+        resp = requests.get(f"{TWITCH_API_BASE}/users", headers=headers, params=params, timeout=15)
+    except Exception as e:
+        print(f"[DEBUG stream_management] Exception fetching user id: {e}")
+        log.error(f"[Stream] Error fetching user id: {e}")
+        return None
+    print(f"[DEBUG stream_management] /users status={resp.status_code}")
+    if resp.status_code != 200:
+        print(f"[DEBUG stream_management] /users error body={resp.text[:500]}")
+        log.error(f"[Stream] Failed to get user id: {resp.status_code} - {resp.text}")
+        return None
+    data = resp.json().get("data", [])
+    print(f"[DEBUG stream_management] /users returned {len(data)} records")
+    return (data[0]["id"] if data else None)
+
+def send_shoutout(target_login: str) -> bool:
+    """Send a Helix Shoutout using broadcaster token and required scope."""
+    try:
+        log.info("[Stream] send_shoutout target_login=%s", target_login)
+        from_id = get_broadcaster_id()
+        to_id = get_user_id(target_login)
+        print(f"[DEBUG stream_management] send_shoutout() from_id={from_id} to_id={to_id}")
+        if not (from_id and to_id):
+            log.error("[Stream] Missing ids for shoutout: from_id=%s to_id=%s", from_id, to_id)
+            return False
+        headers = _broadcaster_headers()
+        print(f"[DEBUG stream_management] send_shoutout() headers_set={bool(headers)}")
+        if not headers:
+            log.error("[Stream] Missing broadcaster headers (client id/token)")
+            return False
+        params = {
+            "from_broadcaster_id": from_id,
+            "to_broadcaster_id": to_id,
+            "moderator_id": from_id,
+        }
+        print(f"[DEBUG stream_management] POST /chat/shoutouts params={params}")
+        try:
+            resp = requests.post(f"{TWITCH_API_BASE}/chat/shoutouts", headers=headers, params=params, timeout=15)
+        except Exception as e:
+            print(f"[DEBUG stream_management] Exception sending shoutout: {e}")
+            log.error("[Stream] Error sending shoutout: %s", e)
+            return False
+        print(f"[DEBUG stream_management] send_shoutout() status={resp.status_code}")
+        if 200 <= resp.status_code < 300:
+            log.info("[Stream] Helix shoutout success to=%s status=%s", target_login, resp.status_code)
+            return True
+        print(f"[DEBUG stream_management] send_shoutout() error body={resp.text[:500]}")
+        log.error("[Stream] Helix shoutout failed status=%s body=%s", resp.status_code, resp.text[:500])
+        return False
+    except Exception:
+        return False
+
 
 def search_game(game_name: str) -> Optional[str]:
     """Search game/category by name and return its game_id."""

@@ -9,6 +9,7 @@ import sys
 import time
 import platform
 import subprocess
+import socket
 import signal
 from pathlib import Path
 
@@ -136,14 +137,40 @@ def main():
     else:
         print(f"{Colors.YELLOW}[WARN] LibreTranslate path not found at {lt_script}{Colors.NC}")
 
+    bridge_host = "0.0.0.0"
+    preferred_port = 8765
+    def is_port_free(port, host="0.0.0.0"):
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            s.bind((host, port))
+            s.close()
+            return True
+        except OSError:
+            s.close()
+            return False
+    def find_free_port(start_port: int, end_port: int) -> int:
+        for p in range(start_port, end_port + 1):
+            if is_port_free(p):
+                return p
+        return start_port
+    bridge_port = find_free_port(preferred_port, preferred_port + 10)
+    os.environ["BRIDGE_HOST"] = bridge_host
+    os.environ["BRIDGE_PORT"] = str(bridge_port)
+    os.environ["BRIDGE_URL"] = f"ws://127.0.0.1:{bridge_port}"
+    print(f"[DEBUG] Avatar Bridge selected port: {bridge_port}")
+    start_process("Avatar Bridge Server", f'"{VENV_PYTHON}" MedlarTV/avatar/bridge/server.py', use_venv=True, wait=2)
+
     # ───────────────────────────────────────────────
     # 3️⃣ Medlar Core (inside venv)
     start_process("Medlar Core (FastAPI)", f'"{VENV_PYTHON}" MedlarTV/core/main.py', use_venv=True, wait=4)
 
     # ───────────────────────────────────────────────
-    # 4️⃣ Twitch Listener (inside venv)
-    #start_process("Twitch Listener", f'"{VENV_PYTHON}" MedlarTV/tools/twitch_listener.py', use_venv=True, wait=2)
+    # Avatar Console Client (inside venv, optional)
+    if os.getenv("ENABLE_AVATAR_CONSOLE", "0") == "1":
+        start_process("Avatar Console Client", f'"{VENV_PYTHON}" MedlarTV/avatar_client/console_client.py', use_venv=True, wait=2)
 
+    # ───────────────────────────────────────────────
     print(f"\n{Colors.GREEN}✅ MedlarTV Systems Operational{Colors.NC}")
     print(f"{Colors.YELLOW}Press Ctrl+C to shutdown gracefully...{Colors.NC}\n")
 

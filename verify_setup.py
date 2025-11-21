@@ -270,14 +270,16 @@ def check_ollama() -> bool:
         warn("Ollama version check timed out")
         return False
 
+    base = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
     try:
-        r = requests.get("http://127.0.0.1:11434/api/tags", timeout=5)
+        r = requests.get(f"{base}/api/tags", timeout=5)
         if r.status_code == 200:
-            ok("Ollama server responding on 127.0.0.1:11434")
+            ok(f"Ollama server responding on {base}")
         else:
-            warn(f"Ollama server returned {r.status_code}")
+            warn(f"Ollama server returned {r.status_code} at {base}")
+            return False
     except Exception:
-        warn("Ollama server not reachable on 127.0.0.1:11434")
+        warn(f"Ollama server not reachable on {base}")
         return False
 
     return True

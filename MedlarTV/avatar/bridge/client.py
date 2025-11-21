@@ -99,6 +99,14 @@ def send_mood_update(mood: str):
     ws_send({"event": "mood_update", "mood": mood})
 
 
+def is_bridge_available() -> bool:
+    try:
+        with connect(BRIDGE_URL):
+            return True
+    except Exception:
+        return False
+
+
 if __name__ == "__main__":
     print("[DEBUG bridge_client] __main__ invoked — calling start_bridge_loop()")
     start_bridge_loop()

@@ -10,6 +10,7 @@ import logging
 from typing import Dict, Any, Optional, List
 from pathlib import Path
 import yaml
+import winsound
 
 from MedlarTV.core.fuzzy_trigger import should_respond
 from MedlarTV.core.command_handlers import execute_command
@@ -18,6 +19,9 @@ from MedlarTV.core.twitch_events import (
     detect_raid, detect_subscription, detect_channel_point_redemption, detect_bits,
 )
 from MedlarTV.core.llm_brain import generate_response
+from MedlarTV.core.interaction_logger import log_interaction
+from MedlarTV.core.time_lookup import should_lookup_time, get_times_for_location, get_default_local_time
+from MedlarTV.core.web_search import search_intelligently
 
 log = logging.getLogger("twitch_listener")
 
@@ -127,6 +131,161 @@ def _remove_copilot(username: str) -> bool:
     return False
 
 # ----------------------------------------------------------------------------
+# Firebot-like Events & Effects
+# ----------------------------------------------------------------------------
+
+_seen_users: set[str] = set()
+
+def _load_event_rules() -> list[dict[str, Any]]:
+    cfg = Path(__file__).resolve().parents[1] / "config" / "events.yaml"
+    try:
+        with cfg.open("r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+        return list(data.get("events", []))
+    except Exception:
+        return []
+
+def _is_ignored(username: str) -> bool:
+    try:
+        cfg = Path(__file__).resolve().parents[1] / "config" / "events.yaml"
+        with cfg.open("r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+        ignore = set(str(u).lower() for u in (data.get("ignored_users") or []))
+        return username.lower() in ignore
+    except Exception:
+        return False
+
+def _play_local_sound(path: str) -> bool:
+    p = Path(path)
+    if not p.exists():
+        return False
+    # simple cooldown per file to avoid echo/retrigger
+    try:
+        with _audio_lock:
+            last = _last_audio_play.get(str(p), 0.0)
+            now = time.time()
+            delta = now - last
+            if delta < 5.0:
+                try:
+                    log.info(f"[SoundEffect] cooldown skip path={str(p)} delta={delta:.2f}s")
+                except Exception:
+                    pass
+                return False
+            _last_audio_play[str(p)] = now
+            try:
+                log.info(f"[SoundEffect] cooldown pass path={str(p)}")
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    if p.suffix.lower() == ".wav":
+        try:
+            try:
+                log.info(f"[SoundEffect] playing wav path={str(p)}")
+            except Exception:
+                pass
+            winsound.PlaySound(str(p), winsound.SND_FILENAME | winsound.SND_ASYNC)
+            return True
+        except Exception:
+            try:
+                log.error(f"[SoundEffect] wav playback failed path={str(p)}")
+            except Exception:
+                pass
+            return False
+    if p.suffix.lower() in {".mp3", ".m4a", ".aac"}:
+        try:
+            import subprocess
+            ps = (
+                "Add-Type -AssemblyName presentationCore; "
+                "$p = New-Object System.Windows.Media.MediaPlayer; "
+                f"$p.Open(\"{str(p)}\"); $p.Volume=1; $p.Play(); "
+                "Start-Sleep -Milliseconds 2500"
+            )
+            try:
+                log.info(f"[SoundEffect] playing via MediaPlayer path={str(p)}")
+            except Exception:
+                pass
+            subprocess.Popen(["powershell", "-NoProfile", "-Command", ps])
+            return True
+        except Exception:
+            try:
+                log.error(f"[SoundEffect] MediaPlayer playback failed path={str(p)}")
+            except Exception:
+                pass
+            pass
+    try:
+        try:
+            log.info(f"[SoundEffect] opening default player path={str(p)}")
+        except Exception:
+            pass
+        os.startfile(str(p))
+        return True
+    except Exception:
+        try:
+            log.error(f"[SoundEffect] default player open failed path={str(p)}")
+        except Exception:
+            pass
+        return False
+
+def _apply_event_rules(event_name: str, username: str, send_message: callable, sock) -> None:
+    if _is_ignored(username):
+        try:
+            log.info(f"[Events] ignored user={username} for trigger={event_name}")
+        except Exception:
+            pass
+        return
+    rules = _load_event_rules()
+    for r in rules:
+        if str(r.get("trigger", "")) != event_name:
+            continue
+        flt = r.get("filters", {}) or {}
+        uname_eq = str(flt.get("username_equals", ""))
+        if uname_eq and uname_eq.lower() != username.lower():
+            continue
+        effects = r.get("effects", []) or []
+        try:
+            log.info(f"[Events] trigger={event_name} user={username} matched rule={r.get('name','')} effects={len(effects)}")
+        except Exception:
+            pass
+        for eff in effects:
+            try:
+                delay_ms = int(eff.get("delay_ms", 0))
+            except Exception:
+                delay_ms = 0
+            if delay_ms > 0:
+                try:
+                    time.sleep(delay_ms / 1000.0)
+                except Exception:
+                    pass
+            t = str(eff.get("type", ""))
+            if t == "chat":
+                msg = str(eff.get("message", ""))
+                if msg:
+                    send_message(msg)
+            elif t == "twitch_shoutout":
+                target = str(eff.get("target", username))
+                try:
+                    from MedlarTV.core.stream_management import send_shoutout
+                    ok = send_shoutout(target)
+                except Exception:
+                    ok = False
+                if not ok:
+                    from MedlarTV.core.moderation import execute_shoutout
+                    try:
+                        execute_shoutout(sock, CHANNEL, target)
+                    except Exception:
+                        pass
+                try:
+                    log.info(f"[Events] shoutout effect target={target} api_ok={ok}")
+                except Exception:
+                    pass
+            elif t == "play_sound":
+                path = str(eff.get("path", ""))
+                if path:
+                    _play_local_sound(path)
+
+# ----------------------------------------------------------------------------
 # IRC CLIENT CLASS
 # ----------------------------------------------------------------------------
 
@@ -135,6 +294,7 @@ class TwitchIRC:
         self.sock: Optional[socket.socket] = None
         self.connected: bool = False
         self.stop_flag: bool = False
+        self.available_emotes: List[str] = []
 
     # ---------------------------- CONNECT ----------------------------
     def connect(self):
@@ -152,6 +312,11 @@ class TwitchIRC:
         self.connected = True
         log.info(f"[IRC] Connected as {BOT_NICK} to {CHANNEL}")
 
+        try:
+            self._init_emotes()
+        except Exception:
+            pass
+
     # ------------------------------------------------------------------
     def _send_raw(self, text: str):
         if not self.sock:
@@ -161,7 +326,55 @@ class TwitchIRC:
     def send_message(self, msg: str):
         if not self.connected:
             return
-        self._send_raw(f"PRIVMSG {CHANNEL} :{msg}")
+        try:
+            final = self._decorate_message(msg)
+        except Exception:
+            final = msg
+        self._send_raw(f"PRIVMSG {CHANNEL} :{final}")
+
+    def _init_emotes(self) -> None:
+        try:
+            token = os.getenv("DEVILMEDLAR_TWITCH_TOKEN", "").replace("oauth:", "")
+            if not token:
+                return
+            from MedlarTV.core.stream_management import get_broadcaster_id
+            bid = get_broadcaster_id()
+            if not bid:
+                return
+            from MedlarTV.core.twitch_events import load_global_emotes, load_channel_emotes
+            g = load_global_emotes(token)
+            c = load_channel_emotes(token, bid)
+            emotes = sorted(set((g or []) + (c or [])))
+            self.available_emotes = emotes
+            try:
+                log.info(f"[IRC] Loaded {len(self.available_emotes)} Twitch emotes for channel")
+            except Exception:
+                pass
+        except Exception:
+            pass
+
+    def _decorate_message(self, msg: str) -> str:
+        try:
+            if os.getenv("ENABLE_EMOTE_RESPONSES", "true").lower() != "true":
+                return _prepare_msg(msg)
+            avail = self.available_emotes or []
+            try:
+                from MedlarTV.core.emotional_system import get_current_emotion
+                from MedlarTV.core.emotion_emote_selector import add_emotion_emote
+                emotion = get_current_emotion()
+                base = _prepare_msg(msg)
+                return add_emotion_emote(base, emotion, avail)
+            except Exception:
+                pass
+            try:
+                from MedlarTV.core.twitch_events import add_random_emote
+                base = _prepare_msg(msg)
+                return add_random_emote(base, avail)
+            except Exception:
+                pass
+            return _prepare_msg(msg)
+        except Exception:
+            return _prepare_msg(msg)
 
     # ------------------------------ LOOP ------------------------------
     def listen(self):
@@ -198,8 +411,67 @@ class TwitchIRC:
             self._send_raw("PONG :tmi.twitch.tv")
             return
 
-        # PRIVMSG, USERNOTICE, JOIN/PART events etc.
+        try:
+            if " USERSTATE " in line and "emote-sets=" in line:
+                idx = line.find("emote-sets=")
+                if idx != -1:
+                    seg = line[idx:].split(";", 1)[0]
+                    val = seg.split("=", 1)[1]
+                    sets = [s.strip() for s in val.split(",") if s.strip()]
+                    if sets:
+                        self._fetch_emote_sets(sets)
+        except Exception:
+            pass
+
+        if " JOIN " in line:
+            try:
+                prefix = line.split(" JOIN ", 1)[0]
+                if "!" in prefix:
+                    username = prefix.split("!", 1)[0].lstrip(":")
+                    key = username.lower()
+                    if key not in _arrived_users:
+                        _arrived_users.add(key)
+                        _apply_event_rules("viewer_arrived", username, self.send_message, self.sock)
+            except Exception:
+                pass
+            return
+
         self._process_incoming(line)
+
+    def _fetch_emote_sets(self, set_ids: List[str]) -> None:
+        try:
+            token = os.getenv("DEVILMEDLAR_TWITCH_TOKEN", "").replace("oauth:", "")
+            client_id = os.getenv("APP_TWITCH_CLIENT_ID", "")
+            if not token or not client_id:
+                return
+            import requests
+            headers = {"Client-ID": client_id, "Authorization": f"Bearer {token}"}
+            names: List[str] = []
+            for sid in set_ids:
+                try:
+                    r = requests.get(
+                        "https://api.twitch.tv/helix/chat/emotes",
+                        headers=headers,
+                        params={"emote_set_id": sid},
+                        timeout=10,
+                    )
+                    if r.status_code == 200:
+                        data = r.json().get("data", [])
+                        for em in data:
+                            n = em.get("name")
+                            if n:
+                                names.append(str(n))
+                except Exception:
+                    pass
+            if names:
+                merged = sorted(set(self.available_emotes + names))
+                self.available_emotes = merged
+                try:
+                    log.info(f"[IRC] Emote sets merged, total available={len(self.available_emotes)}")
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
     # ------------------------------------------------------------------
     def _process_incoming(self, raw: str):
@@ -209,6 +481,11 @@ class TwitchIRC:
 
         if username is None or message is None:
             return
+
+        try:
+            self._learn_emotes_from_message(tags, message)
+        except Exception:
+            pass
 
         ctx: Dict[str, Any] = {
             "bot_nick": BOT_NICK,
@@ -289,6 +566,37 @@ class TwitchIRC:
         except Exception:
             return {}, None, None
 
+    def _learn_emotes_from_message(self, tags: Dict[str, Any], message: str) -> None:
+        try:
+            emtag = tags.get("emotes", "")
+            if not emtag:
+                return
+            pieces: List[str] = []
+            for grp in emtag.split("/"):
+                if ":" not in grp:
+                    continue
+                _, ranges = grp.split(":", 1)
+                for r in ranges.split(","):
+                    if "-" not in r:
+                        continue
+                    s, e = r.split("-", 1)
+                    try:
+                        start = int(s)
+                        end = int(e)
+                        if 0 <= start <= end < len(message):
+                            pieces.append(message[start:end+1])
+                    except Exception:
+                        continue
+            if pieces:
+                merged = sorted(set(self.available_emotes + pieces))
+                self.available_emotes = merged
+                try:
+                    log.info(f"[IRC] Learned emotes from chat, total available={len(self.available_emotes)}")
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
     # ------------------- REGULAR CHAT ----------------------
     def _handle_regular_message(self, username: str, msg: str, ctx: Dict[str, Any], tags: Dict[str, Any]):
         log.debug(f"[DEBUG] Incoming chat: @{username}: {msg}")
@@ -312,6 +620,49 @@ class TwitchIRC:
                 self.send_message(f"@{username} ⚠️ {reason}")
             return
 
+        try:
+            if _is_ignored(username):
+                return
+            lookup, location = should_lookup_time(msg)
+        except Exception:
+            lookup, location = False, None
+        if lookup and location:
+            try:
+                ti = get_times_for_location(location)
+            except Exception:
+                ti = None
+            if ti:
+                final = _prepare_msg(_role_prefix(username) + ti)
+                self.send_message(final)
+                try:
+                    log_interaction(username, msg, ti)
+                except Exception:
+                    pass
+                return
+            else:
+                not_found = f"Location not found: {location}"
+                final = _prepare_msg(_role_prefix(username) + not_found)
+                self.send_message(final)
+                try:
+                    log_interaction(username, msg, not_found)
+                except Exception:
+                    pass
+                return
+
+        if lookup and not location:
+            try:
+                ti = get_default_local_time()
+            except Exception:
+                ti = None
+            if ti:
+                final = _prepare_msg(_role_prefix(username) + ti)
+                self.send_message(final)
+                try:
+                    log_interaction(username, msg, ti)
+                except Exception:
+                    pass
+                return
+
         # ------------------------------------------
         # Fuzzy-triggered Medlar response (IMPORTANT)
         # ------------------------------------------
@@ -327,12 +678,24 @@ class TwitchIRC:
                 f"[DEBUG] Calling generate_response(user={username}, msg={msg})"
             )
 
-            reply = generate_response(msg, username)
+            try:
+                search_context = search_intelligently(msg)
+            except Exception:
+                search_context = ""
+            enriched = msg + ("\n" + search_context if search_context else "")
+            reply = generate_response(enriched, username)
 
             log.debug(f"[DEBUG] generate_response() output: {reply}")
 
             if reply:
-                self.send_message(_prepare_msg(_role_prefix(username) + reply))
+                final = _prepare_msg(_role_prefix(username) + reply)
+                self.send_message(final)
+                try:
+                    log_interaction(username, msg, reply)
+                except Exception:
+                    pass
+
+        # viewer_arrived now handled via JOIN and gated by _arrived_users
 
     # ------------------- COMMAND HANDLING ----------------------
     def _handle_command(self, username: str, full: str, ctx: Dict[str, Any], tags: Dict[str, Any]):
@@ -394,7 +757,12 @@ class TwitchIRC:
         response = execute_command(cmd, username, role, args, ctx)
 
         if response:
-            self.send_message(_prepare_msg(_role_prefix(username) + response))
+            final = _prepare_msg(_role_prefix(username) + response)
+            self.send_message(final)
+            try:
+                log_interaction(username, full, response)
+            except Exception:
+                pass
         else:
             log.debug(
                 f"[DEBUG] Command fallback to generate_response(user={username}, msg={full})"
@@ -402,7 +770,12 @@ class TwitchIRC:
             reply = generate_response(full, username)
             log.debug(f"[DEBUG] generate_response() command output: {reply}")
             if reply:
-                self.send_message(_prepare_msg(_role_prefix(username) + reply))
+                final = _prepare_msg(_role_prefix(username) + reply)
+                self.send_message(final)
+                try:
+                    log_interaction(username, full, reply)
+                except Exception:
+                    pass
 
 
 # ----------------------------------------------------------------------------
@@ -420,11 +793,19 @@ def start_listener():
         log.info("[Listener] Already running.")
         return
 
+    try:
+        _arrived_users.clear()
+        _last_audio_play.clear()
+        log.info("[Listener] Session state cleared (arrivals, audio)")
+    except Exception:
+        pass
+
     _listener_instance = TwitchIRC()
     _listener_instance.connect()
 
     _listener_thread = threading.Thread(target=_listener_instance.listen, daemon=True)
     _listener_thread.start()
+
 
     log.info("[Listener] Twitch listener started.")
 
@@ -434,4 +815,17 @@ def stop_listener():
     if _listener_instance:
         _listener_instance.stop()
         log.info("[Listener] Stopped.")
+
+def trigger_event_for_testing(username: str) -> None:
+    class Dummy:
+        def send(self, b):
+            print(b.decode())
+    sock = Dummy()
+    def send_msg(m):
+        print(f"CHAT_SEND: {m}")
+    _apply_event_rules("viewer_arrived", username, send_msg, sock)
+
+_arrived_users: set[str] = set()
+_audio_lock = threading.Lock()
+_last_audio_play: dict[str, float] = {}
 

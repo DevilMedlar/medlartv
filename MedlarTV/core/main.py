@@ -16,10 +16,9 @@ from dotenv import load_dotenv
 import signal
 import sys
 import time
-import threading
 from typing import Dict, Any
 
-from fastapi import FastAPI, Response
+from fastapi import FastAPI
 from fastapi.responses import JSONResponse, HTMLResponse
 import yaml
 
@@ -179,14 +178,6 @@ def page_commands() -> HTMLResponse:
     """
     return HTMLResponse(content=html, status_code=200)
 
-def start_commands_web():
-    import uvicorn
-    host = os.getenv("COMMANDS_HOST", "127.0.0.1")
-    port = int(os.getenv("COMMANDS_PORT", "8000"))
-    config = uvicorn.Config(APP, host=host, port=port, log_level="info")
-    server = uvicorn.Server(config)
-    t = threading.Thread(target=server.run, daemon=True)
-    t.start()
 
 def configure_logging():
     log_dir = os.getenv("LOG_DIRECTORY", "logs")

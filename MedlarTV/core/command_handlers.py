@@ -11,6 +11,11 @@ import logging
 import os
 import time
 from typing import Any, Callable, Dict, Optional
+from MedlarTV.core.interaction_logger import log_command
+from MedlarTV.core.time_lookup import get_times_for_location
+from MedlarTV.core.time_lookup import world_clock_summary, list_timezones
+from MedlarTV.core.web_search import search_web, search_wikipedia
+from MedlarTV.core.translation_command import handle_t_command, handle_tlang_command, HELP as TRANSLATE_HELP
 
 log = logging.getLogger("commands")
 log.setLevel(logging.DEBUG)
@@ -41,8 +46,11 @@ def handle_status(username: str, args: str, context: CommandContext) -> str:
     # IRC connection
     systems.append("IRC:OK" if context.get("socket_connected", False) else "IRC:FAILED")
 
-    # Bridge connection (best-effort)
-    systems.append("Bridge:OK" if context.get("bridge_connected", False) else "Bridge:FAILED")
+    try:
+        from MedlarTV.avatar.bridge.client import is_bridge_available
+        systems.append("Bridge:OK" if is_bridge_available() else "Bridge:FAILED")
+    except Exception:
+        systems.append("Bridge:FAILED")
 
     # Emotional system
     try:
@@ -239,28 +247,6 @@ def handle_game(username: str, args: str, context: CommandContext) -> str:
         log.error(f"[Game] Error: {e}")
         return "❌ Failed to process game command."
 
-def handle_help(username: str, args: str, context: CommandContext) -> str:
-    """!help - Show all public commands (plus core YAML ones)."""
-    public_cmds: list[str] = []
-    for name, info in COMMAND_REGISTRY.items():
-        if PERMISSION_EVERYONE in info.get("permissions", []):
-            public_cmds.append(f"!{name}")
-
-    # Known YAML-based commands that remain outside this handler
-    yaml_public = [
-        "!hello",
-        "!hype",
-        "!medlar",
-        "!mood",
-        "!t",
-        "!tlang",
-        "!thelp",
-        "!listcopilots",
-    ]
-
-    all_cmds = sorted(set(public_cmds + yaml_public))
-    return f"📋 Available commands: {', '.join(all_cmds)}"
-
 def handle_commands(username: str, args: str, context: CommandContext) -> str:
     url = os.getenv("COMMANDS_URL")
     if not url:
@@ -279,28 +265,7 @@ def handle_commands(username: str, args: str, context: CommandContext) -> str:
         url = f"http://{host}:{port}/"
     return f"📋 Command catalog: {url}"
 
-def handle_modhelp(username: str, args: str, context: CommandContext) -> str:
-    """!modhelp - Show moderator/pilot-level commands."""
-    restricted: list[str] = []
-    for name, info in COMMAND_REGISTRY.items():
-        perms = info.get("permissions", [])
-        if PERMISSION_EVERYONE not in perms:
-            restricted.append(f"!{name}")
-
-    yaml_mod = [
-        "!moodnumbers",
-        "!addcopilot",
-        "!removecopilot",
-        "!timeout",
-        "!ban",
-        "!warn",
-        "!unwarn",
-        "!whitelist",
-        "!modstats",
-    ]
-
-    all_cmds = sorted(set(restricted + yaml_mod))
-    return f"🛡️ Mod commands: {', '.join(all_cmds)}"
+    return f"📋 Command catalog: {url}"
 
 # =============================================================================
 # COMMAND REGISTRY / PERMISSIONS
@@ -313,77 +278,7 @@ PERMISSION_COPILOT = "copilot"
 PERMISSION_VIP = "vip"
 
 
-COMMAND_REGISTRY: Dict[str, Dict[str, Any]] = {
-    # ----- System -----
-    "ping": {
-        "handler": handle_ping,
-        "permissions": [PERMISSION_EVERYONE],
-        "description": "Check bot latency and responsiveness",
-    },
-    "status": {
-        "handler": handle_status,
-        "permissions": [PERMISSION_EVERYONE],
-        "description": "Check status of all bot systems",
-    },
-
-    # ----- Emotions -----
-    "emotion": {
-        "handler": handle_emotion,
-        "permissions": [PERMISSION_EVERYONE],
-        "description": "Show MedlarTV's current dominant emotion",
-    },
-    "emotions": {
-        "handler": handle_emotions,
-        "permissions": [PERMISSION_EVERYONE],
-        "description": "Show top 3 emotions with percentages",
-    },
-    "feelstate": {
-        "handler": handle_feelstate,
-        "permissions": [PERMISSION_EVERYONE],
-        "description": "Show detailed emotional state description",
-    },
-    "resetemotions": {
-        "handler": handle_resetemotions,
-        "permissions": [PERMISSION_PILOT, PERMISSION_MOD],
-        "description": "Reset all emotions to baseline (Pilot/Mod only)",
-    },
-
-    # ----- Stream management -----
-    "streaminfo": {
-        "handler": handle_streaminfo,
-        "permissions": [PERMISSION_EVERYONE],
-        "description": "Get current stream information (title, game, viewers, uptime)",
-    },
-    "title": {
-        "handler": handle_title,
-        "permissions": [PERMISSION_EVERYONE],  # view for all; set gated in executor
-        "description": "Get or set stream title",
-        "usage": "!title [new title] - Leave blank to view, provide title to set",
-    },
-    "game": {
-        "handler": handle_game,
-        "permissions": [PERMISSION_EVERYONE],  # view for all; set gated in executor
-        "description": "Get or set stream category/game",
-        "usage": "!game [new game] - Leave blank to view, provide game name to set",
-    },
-
-    # ----- Help -----
-    "help": {
-        "handler": handle_help,
-        "permissions": [PERMISSION_EVERYONE],
-        "description": "Show all available commands",
-    },
-    "commands": {
-        "handler": handle_commands,
-        "permissions": [PERMISSION_EVERYONE],
-        "description": "Show all available commands",
-    },
-    "modhelp": {
-        "handler": handle_modhelp,
-        "permissions": [PERMISSION_PILOT, PERMISSION_MOD],
-        "description": "Show moderator and pilot commands",
-    },
-}
+ 
 
 # =============================================================================
 # COMMAND EXECUTION ENGINE
@@ -447,6 +342,10 @@ def execute_command(
 
         log.debug(f"[DEBUG] Handler returned: {response}")
         log.info(f"[Command] {username} executed !{command}")
+        try:
+            log_command(username, f"!{command}", success=True)
+        except Exception:
+            pass
 
         return response
 
@@ -457,6 +356,10 @@ def execute_command(
         import traceback
         traceback.print_exc()
 
+        try:
+            log_command(username, f"!{command}", success=False, error=str(e))
+        except Exception:
+            pass
         return f"❌ Command failed: {command}"
 
 
@@ -508,3 +411,181 @@ def get_command_help(command: str | None = None) -> str:
 
 That's it. The unified handler will start routing !mycommand automatically.
 """
+def handle_time(username: str, args: str, context: CommandContext) -> str:
+    q = (args or "").strip()
+    if not q:
+        from MedlarTV.core.time_lookup import get_default_local_time
+        res = get_default_local_time()
+        if res:
+            return res
+        return "Unable to get local time"
+    res = get_times_for_location(q)
+    if not res:
+        return f"Location not found: {q}"
+    if isinstance(res, str) and res.lower().startswith("current time in"):
+        return res
+    return f"Current time in {q}: {res}"
+
+def handle_worldclock(username: str, args: str, context: CommandContext) -> str:
+    summary = world_clock_summary()
+    return summary
+
+def handle_timezones(username: str, args: str, context: CommandContext) -> str:
+    f = (args or "").strip() or None
+    zones = list_timezones(f)
+    if not zones:
+        return "No timezones found"
+    count = len(zones)
+    sample = ", ".join(zones[:12])
+    if f:
+        return f"{count} zones match '{f}': {sample}"
+    return f"{count} zones available: {sample}"
+
+def handle_search(username: str, args: str, context: CommandContext) -> str:
+    q = (args or "").strip()
+    if not q:
+        return "Usage: !search <query>"
+    try:
+        results = search_web(q, max_results=2)
+    except Exception:
+        results = []
+    if not results:
+        return f"No results for: {q}"
+    parts = []
+    for r in results[:2]:
+        t = r.get("title", "N/A")
+        u = r.get("href", "")
+        if u:
+            parts.append(f"{t} — {u}")
+        else:
+            parts.append(t)
+    return " | ".join(parts)
+
+def handle_wiki(username: str, args: str, context: CommandContext) -> str:
+    q = (args or "").strip()
+    if not q:
+        return "Usage: !wiki <topic>"
+    try:
+        res = search_wikipedia(q, sentences=2)
+    except Exception:
+        res = None
+    if not res:
+        return f"No Wikipedia page found for: {q}"
+    title = res.get("title", q)
+    summary = res.get("summary", "")
+    url = res.get("url", "")
+    msg = f"{title}: {summary}"
+    if len(msg) > 280:
+        msg = msg[:277] + "..."
+    if url:
+        return f"{msg} | {url}"
+    return msg
+
+def handle_t(username: str, args: str, context: CommandContext) -> str:
+    return handle_t_command(args, username)
+
+def handle_tlang(username: str, args: str, context: CommandContext) -> str:
+    return handle_tlang_command()
+
+def handle_thelp(username: str, args: str, context: CommandContext) -> str:
+    return TRANSLATE_HELP
+
+COMMAND_REGISTRY: Dict[str, Dict[str, Any]] = {
+    "ping": {
+        "handler": handle_ping,
+        "permissions": [PERMISSION_EVERYONE],
+        "description": "Check bot latency and responsiveness",
+    },
+    "status": {
+        "handler": handle_status,
+        "permissions": [PERMISSION_EVERYONE],
+        "description": "Check status of all bot systems",
+    },
+    "emotion": {
+        "handler": handle_emotion,
+        "permissions": [PERMISSION_EVERYONE],
+        "description": "Show MedlarTV's current dominant emotion",
+    },
+    "emotions": {
+        "handler": handle_emotions,
+        "permissions": [PERMISSION_EVERYONE],
+        "description": "Show top 3 emotions with percentages",
+    },
+    "feelstate": {
+        "handler": handle_feelstate,
+        "permissions": [PERMISSION_EVERYONE],
+        "description": "Show detailed emotional state description",
+    },
+    "time": {
+        "handler": handle_time,
+        "permissions": [PERMISSION_EVERYONE],
+        "description": "Get current time for a location/country",
+        "usage": "!time <location>",
+    },
+    "search": {
+        "handler": handle_search,
+        "permissions": [PERMISSION_EVERYONE],
+        "description": "Web search via DuckDuckGo",
+        "usage": "!search <query>",
+    },
+    "wiki": {
+        "handler": handle_wiki,
+        "permissions": [PERMISSION_EVERYONE],
+        "description": "Wikipedia lookup",
+        "usage": "!wiki <topic>",
+    },
+    "worldclock": {
+        "handler": handle_worldclock,
+        "permissions": [PERMISSION_EVERYONE],
+        "description": "World clock summary across major cities",
+    },
+    "timezones": {
+        "handler": handle_timezones,
+        "permissions": [PERMISSION_EVERYONE],
+        "description": "List available timezones (optional filter)",
+        "usage": "!timezones [filter]",
+    },
+    "t": {
+        "handler": handle_t,
+        "permissions": [PERMISSION_EVERYONE],
+        "description": "Translate text to another language",
+        "usage": "!t <lang> <text>",
+    },
+    "tlang": {
+        "handler": handle_tlang,
+        "permissions": [PERMISSION_EVERYONE],
+        "description": "Show supported translation languages",
+    },
+    "thelp": {
+        "handler": handle_thelp,
+        "permissions": [PERMISSION_EVERYONE],
+        "description": "Show translation command usage",
+    },
+    "resetemotions": {
+        "handler": handle_resetemotions,
+        "permissions": [PERMISSION_PILOT, PERMISSION_MOD],
+        "description": "Reset all emotions to baseline (Pilot/Mod only)",
+    },
+    "streaminfo": {
+        "handler": handle_streaminfo,
+        "permissions": [PERMISSION_EVERYONE],
+        "description": "Get current stream information (title, game, viewers, uptime)",
+    },
+    "title": {
+        "handler": handle_title,
+        "permissions": [PERMISSION_EVERYONE],
+        "description": "Get or set stream title",
+        "usage": "!title [new title] - Leave blank to view, provide title to set",
+    },
+    "game": {
+        "handler": handle_game,
+        "permissions": [PERMISSION_EVERYONE],
+        "description": "Get or set stream category/game",
+        "usage": "!game [new game] - Leave blank to view, provide game name to set",
+    },
+    "commands": {
+        "handler": handle_commands,
+        "permissions": [PERMISSION_EVERYONE],
+        "description": "Show all available commands",
+    },
+}

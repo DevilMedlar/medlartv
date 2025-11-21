@@ -1,7 +1,7 @@
 import logging
 from typing import Tuple, Optional
 from MedlarTV.core.translation import (
-    normalize_lang, translate_text, supported_list_human
+    normalize_lang, translate_text, supported_list_human, detect_language
 )
 
 log = logging.getLogger("translation_cmd")
@@ -58,6 +58,7 @@ def handle_t_command(raw_after_cmd: str, username: str) -> str:
         print(f"[DEBUG translation_cmd] handle_t_command(): unsupported → {msg!r}")
         return msg
 
+    src = detect_language(text)
     ok, result = translate_text(text, norm)
     print(f"[DEBUG translation_cmd] handle_t_command(): translate returned ok={ok} result={result!r}")
 
@@ -66,7 +67,8 @@ def handle_t_command(raw_after_cmd: str, username: str) -> str:
         print(f"[DEBUG translation_cmd] handle_t_command(): translation failed → {msg!r}")
         return msg
 
-    final = f"@{username} → [{norm}] {result}"
+    src_norm = normalize_lang(src) or src
+    final = f"@{username} → [{norm}] {result} (from [{src_norm}] to [{norm}])"
     print(f"[DEBUG translation_cmd] handle_t_command(): returning {final!r}")
     return final
 

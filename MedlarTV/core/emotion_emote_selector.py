@@ -122,10 +122,11 @@ def get_emotion_emote(emotion: str, emote_type: str = "twitch", available_emotes
         if not emote_pool and available_emotes:
             emote_pool = available_emotes
 
-    log.debug(f"[EMOTE] Selected emote='{emote}' from pool={emote_pool}")    
     # Return random emote from pool
     if emote_pool:
-        return random.choice(emote_pool)
+        chosen = random.choice(emote_pool)
+        log.debug(f"[EMOTE] Selected emote='{chosen}' from pool={emote_pool}")
+        return chosen
     
     # Absolute fallback
     return "devilmeGODMODE" if emote_type == "twitch" else "💬"

@@ -3,6 +3,7 @@ import logging
 from typing import Optional, Tuple
 from langdetect import detect, DetectorFactory
 import requests
+import os
 
 log = logging.getLogger("translation")
 
@@ -92,7 +93,7 @@ def add_language_indicator(msg: str, target_lang: str) -> str:
 
 # --- Translation engine (LibreTranslate first, fallback none for simplicity) ---
 
-LIBRE_URL = "http://127.0.0.1:5000/translate"
+LIBRE_URL = os.getenv("LIBRETRANSLATE_URL", "http://127.0.0.1:5000/translate")
 
 
 def translate_text(text: str, target_lang: str) -> Tuple[bool, str]:

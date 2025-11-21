@@ -8,6 +8,36 @@ commands:
     response: "System nominal ⚙️ | Connected as {nick}"
     allowed_roles: ["everybody"]
   
+  time:
+    response: "Fetching time..."
+    allowed_roles: ["everybody"]
+    description: "Get current time for a location"
+    usage: "!time <zone/country/city>"
+
+  worldclock:
+    response: "World clock summary..."
+    allowed_roles: ["everybody"]
+    description: "World clock summary across major cities"
+    usage: "!worldclock"
+
+  timezones:
+    response: "Listing timezones..."
+    allowed_roles: ["everybody"]
+    description: "List available timezones"
+    usage: "!timezones [filter]"
+
+  search:
+    response: "Searching..."
+    allowed_roles: ["everybody"]
+    description: "Web search via DuckDuckGo"
+    usage: "!search <query>"
+
+  wiki:
+    response: "Looking up Wikipedia..."
+    allowed_roles: ["everybody"]
+    description: "Wikipedia lookup"
+    usage: "!wiki <topic>"
+
   hello:
     response: "Hey {user}! 👋 Ready for action."
     allowed_roles: ["everybody"]

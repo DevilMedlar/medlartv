@@ -1,0 +1,19 @@
+events:
+  - name: homelesmidgets
+    trigger: viewer_arrived
+    filters:
+      username_equals: homelesmidgets
+    effects:
+      - type: chat
+        message: "!so homelesmidgets"
+      - type: twitch_shoutout
+        target: homelesmidgets
+      - type: play_sound
+        path: C:\Users\znorr\medlartv\Sounds\monster-growl.mp3
+ignored_users:
+  - streamelements
+  - fossabot
+  - soundalerts
+  - ignitionrage
+  - medlartv
+  

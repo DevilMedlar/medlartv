@@ -2,6 +2,7 @@ import asyncio
 import websockets
 import json
 import time
+import os
 
 print("[DEBUG bridge_server] Module import started")
 
@@ -154,6 +155,11 @@ async def run_server(host="0.0.0.0", port=8765):
 # --- Standalone Entrypoint ---
 if __name__ == "__main__":
     print("[DEBUG __main__] Running standalone server mode")
+    host = os.getenv("BRIDGE_HOST", "0.0.0.0")
+    try:
+        port = int(os.getenv("BRIDGE_PORT", "8765"))
+    except Exception:
+        port = 8765
     import asyncio
-    asyncio.run(run_server())
+    asyncio.run(run_server(host, port))
     print("[DEBUG __main__] Server shutdown")
