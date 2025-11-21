@@ -90,6 +90,16 @@ def _role_prefix(username: str) -> str:
     except Exception:
         return f"@{username} "
 
+_TIMERS_FILE = Path(__file__).resolve().parents[1] / "config" / "timers.yaml"
+
+def _load_timers_yaml() -> List[Dict[str, Any]]:
+    try:
+        with _TIMERS_FILE.open("r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+        return list(data.get("timers", []))
+    except Exception:
+        return []
+
 def _prepare_msg(text: str) -> str:
     try:
         return " ".join(text.splitlines())
@@ -295,6 +305,12 @@ class TwitchIRC:
         self.connected: bool = False
         self.stop_flag: bool = False
         self.available_emotes: List[str] = []
+        self._timers: List[Dict[str, Any]] = []
+        self._chat_count: int = 0
+        self._next_chat_due: Dict[str, int] = {}
+        self._next_time_due: Dict[str, float] = {}
+        self._timer_stop: threading.Event = threading.Event()
+        self._timer_thread: Optional[threading.Thread] = None
 
     # ---------------------------- CONNECT ----------------------------
     def connect(self):
@@ -314,6 +330,12 @@ class TwitchIRC:
 
         try:
             self._init_emotes()
+        except Exception:
+            pass
+
+        try:
+            self._timers = _load_timers_yaml()
+            self._init_timers()
         except Exception:
             pass
 
@@ -376,6 +398,61 @@ class TwitchIRC:
         except Exception:
             return _prepare_msg(msg)
 
+    def _load_timers(self) -> List[Dict[str, Any]]:
+        try:
+            return _load_timers_yaml()
+        except Exception:
+            return []
+
+    def _init_timers(self) -> None:
+        try:
+            now = time.time()
+            self._next_chat_due.clear()
+            self._next_time_due.clear()
+            for t in self._timers:
+                if not t.get("enabled"):
+                    continue
+                typ = str(t.get("type", "")).lower()
+                k = str(t.get("id", "")) or str(hash(t.get("message", "")))
+                if typ == "chats":
+                    n = int(t.get("interval_chats", 0))
+                    if n > 0:
+                        self._next_chat_due[k] = n
+                elif typ == "time":
+                    m = int(t.get("interval_minutes", 0))
+                    if m > 0:
+                        self._next_time_due[k] = now + m * 60
+            if self._next_time_due:
+                self._timer_stop.clear()
+                self._timer_thread = threading.Thread(target=self._timer_loop, daemon=True)
+                self._timer_thread.start()
+        except Exception:
+            pass
+
+    def _timer_loop(self) -> None:
+        while not self._timer_stop.is_set():
+            try:
+                now = time.time()
+                for t in self._timers:
+                    if not t.get("enabled"):
+                        continue
+                    if str(t.get("type", "")).lower() != "time":
+                        continue
+                    k = str(t.get("id", "")) or str(hash(t.get("message", "")))
+                    m = int(t.get("interval_minutes", 0))
+                    if m <= 0:
+                        continue
+                    due_ts = self._next_time_due.get(k)
+                    if due_ts is None:
+                        self._next_time_due[k] = now + m * 60
+                        continue
+                    if now >= due_ts:
+                        self.send_message(str(t.get("message", "")))
+                        self._next_time_due[k] = now + m * 60
+            except Exception:
+                pass
+            time.sleep(1.0)
+
     # ------------------------------ LOOP ------------------------------
     def listen(self):
         buffer = ""
@@ -404,6 +481,10 @@ class TwitchIRC:
         self.connected = False
         if self.sock:
             self.sock.close()
+        try:
+            self._timer_stop.set()
+        except Exception:
+            pass
 
     # ------------------------------------------------------------------
     def _handle_raw_message(self, line: str):
@@ -600,6 +681,21 @@ class TwitchIRC:
     # ------------------- REGULAR CHAT ----------------------
     def _handle_regular_message(self, username: str, msg: str, ctx: Dict[str, Any], tags: Dict[str, Any]):
         log.debug(f"[DEBUG] Incoming chat: @{username}: {msg}")
+        try:
+            self._chat_count += 1
+            for t in self._timers:
+                if not t.get("enabled"):
+                    continue
+                if str(t.get("type", "")).lower() == "chats":
+                    k = str(t.get("id", "")) or str(hash(t.get("message", "")))
+                    n = int(t.get("interval_chats", 0))
+                    if n > 0:
+                        due = self._next_chat_due.get(k, n)
+                        if self._chat_count >= due:
+                            self.send_message(str(t.get("message", "")))
+                            self._next_chat_due[k] = due + n
+        except Exception:
+            pass
 
         # Auto-moderation
         result = check_message(username, msg, tags)
@@ -757,6 +853,15 @@ class TwitchIRC:
         response = execute_command(cmd, username, role, args, ctx)
 
         if response:
+            try:
+                if cmd == "roulette" and ("BANG" in response or response.startswith("💥")):
+                    try:
+                        from MedlarTV.core.moderation import execute_timeout
+                        execute_timeout(self.sock, CHANNEL, username, 30, "roulette")
+                    except Exception:
+                        pass
+            except Exception:
+                pass
             final = _prepare_msg(_role_prefix(username) + response)
             self.send_message(final)
             try:

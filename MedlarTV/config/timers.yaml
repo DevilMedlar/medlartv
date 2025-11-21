@@ -1,0 +1,11 @@
+timers:
+  - id: "welcome_message"
+    enabled: true
+    type: "chats"
+    interval_chats: 10
+    message: "Welcome to the stream! Check out our commands with !commands"
+  - id: "follow_reminder"
+    enabled: true
+    type: "time"
+    interval_minutes: 5
+    message: "Don't forget to follow the channel for updates!"

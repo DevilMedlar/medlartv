@@ -11,6 +11,11 @@ import logging
 import os
 import time
 from typing import Any, Callable, Dict, Optional
+import random
+import requests
+from datetime import datetime, timezone
+from pathlib import Path
+import yaml
 from MedlarTV.core.interaction_logger import log_command
 from MedlarTV.core.time_lookup import get_times_for_location
 from MedlarTV.core.time_lookup import world_clock_summary, list_timezones
@@ -265,7 +270,275 @@ def handle_commands(username: str, args: str, context: CommandContext) -> str:
         url = f"http://{host}:{port}/"
     return f"📋 Command catalog: {url}"
 
-    return f"📋 Command catalog: {url}"
+def handle_tip(username: str, args: str, context: CommandContext) -> str:
+    return "💖 Tip page: https://soundalerts.com/@devilmedlar"
+
+def handle_roulette(username: str, args: str, context: CommandContext) -> str:
+    roll = random.randint(1, 6)
+    if roll == 1:
+        return "💥 BANG!"
+    return "🔫 Click… safe."
+
+def handle_8ball(username: str, args: str, context: CommandContext) -> str:
+    responses = [
+        "It is certain.", "Without a doubt.", "You may rely on it.", "Yes definitely.",
+        "As I see it, yes.", "Most likely.", "Outlook good.", "Yes.",
+        "Signs point to yes.", "Reply hazy, try again.", "Ask again later.",
+        "Better not tell you now.", "Cannot predict now.", "Concentrate and ask again.",
+        "Don't count on it.", "My reply is no.", "My sources say no.",
+        "Outlook not so good.", "Very doubtful."
+    ]
+    return random.choice(responses)
+
+def handle_coinflip(username: str, args: str, context: CommandContext) -> str:
+    return "Heads" if random.randint(0, 1) == 0 else "Tails"
+
+def handle_diceroll(username: str, args: str, context: CommandContext) -> str:
+    try:
+        sides = int(args.strip()) if args.strip() else 6
+        if sides < 2:
+            sides = 6
+    except Exception:
+        sides = 6
+    value = random.randint(1, sides)
+    return f"🎲 Rolled a d{sides}: {value}"
+
+def _get_json(url: str, headers: Dict[str, str] | None = None) -> Dict[str, Any]:
+    try:
+        r = requests.get(url, headers=headers or {}, timeout=10)
+        if r.status_code == 200:
+            return r.json()
+    except Exception:
+        pass
+    return {}
+
+def _get_text(url: str, headers: Dict[str, str] | None = None) -> str:
+    try:
+        r = requests.get(url, headers=headers or {}, timeout=10)
+        if r.status_code == 200:
+            return r.text.strip()
+    except Exception:
+        pass
+    return ""
+
+def handle_catfact(username: str, args: str, context: CommandContext) -> str:
+    data = _get_json("https://catfact.ninja/fact")
+    fact = str(data.get("fact") or "Cats are awesome.")
+    return fact
+
+def handle_dogfact(username: str, args: str, context: CommandContext) -> str:
+    data = _get_json("https://dog-api.kinduff.com/api/facts")
+    facts = data.get("facts") or []
+    fact = str(facts[0] if facts else "Dogs are great.")
+    return fact
+
+def handle_funfact(username: str, args: str, context: CommandContext) -> str:
+    data = _get_json("https://uselessfacts.jsph.pl/random.json?language=en")
+    fact = str(data.get("text") or "Fun fact unavailable.")
+    return fact
+
+
+def handle_joke(username: str, args: str, context: CommandContext) -> str:
+    data = _get_json("https://official-joke-api.appspot.com/random_joke")
+    setup = str(data.get("setup") or "")
+    punch = str(data.get("punchline") or "")
+    if setup and punch:
+        return f"{setup} — {punch}"
+    data2 = _get_json("https://icanhazdadjoke.com/", headers={"Accept": "application/json"})
+    joke = str(data2.get("joke") or "No joke found.")
+    return joke
+
+def handle_chucknorris(username: str, args: str, context: CommandContext) -> str:
+    data = _get_json("https://api.chucknorris.io/jokes/random")
+    return str(data.get("value") or "Chuck Norris approved.")
+
+_WATCH_START: Dict[str, float] = {}
+
+def _fmt_duration(seconds: float) -> str:
+    s = int(seconds)
+    h = s // 3600
+    m = (s % 3600) // 60
+    sec = s % 60
+    if h > 0:
+        return f"{h} hours {m} mins"
+    if m > 0:
+        return f"{m} mins {sec} secs"
+    return f"{sec} seconds"
+
+def handle_watchtime(username: str, args: str, context: CommandContext) -> str:
+    now = time.time()
+    key = username.lower()
+    start = _WATCH_START.get(key)
+    if start is None:
+        _WATCH_START[key] = now
+        elapsed = 0.0
+    else:
+        elapsed = now - start
+    channel = os.getenv("TWITCH_CHANNEL", "#devilmedlar").lstrip("#")
+    return f"{username} has spent {_fmt_duration(elapsed)} watching {channel}"
+
+def handle_uptime(username: str, args: str, context: CommandContext) -> str:
+    try:
+        from MedlarTV.core.stream_management import get_stream_info
+        info = get_stream_info()
+        if not info:
+            return "Stream is offline"
+        started_at = info.get("started_at")
+        if not started_at:
+            return "Uptime unavailable"
+        try:
+            dt = datetime.strptime(started_at, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        except Exception:
+            return "Uptime unavailable"
+        now = datetime.now(timezone.utc)
+        elapsed = (now - dt).total_seconds()
+        return f"{os.getenv('TWITCH_CHANNEL', '#devilmedlar').lstrip('#')} has been streaming for {_fmt_duration(elapsed)}"
+    except Exception:
+        return "Uptime unavailable"
+
+def _fmt_age(seconds: float) -> str:
+    s = int(max(0, seconds))
+    years = s // (365 * 24 * 3600)
+    s %= 365 * 24 * 3600
+    months = s // (30 * 24 * 3600)
+    s %= 30 * 24 * 3600
+    days = s // (24 * 3600)
+    s %= 24 * 3600
+    hours = s // 3600
+    parts = []
+    if years: parts.append(f"{years} year{'s' if years!=1 else ''}")
+    if months: parts.append(f"{months} month{'s' if months!=1 else ''}")
+    if days: parts.append(f"{days} day{'s' if days!=1 else ''}")
+    if hours: parts.append(f"{hours} hour{'s' if hours!=1 else ''}")
+    return " ".join(parts) or "0 hours"
+
+def _twitch_headers_app() -> Dict[str, str]:
+    try:
+        from MedlarTV.core.stream_management import get_access_token
+        tok = get_access_token() or ""
+    except Exception:
+        tok = ""
+    client_id = os.getenv("APP_TWITCH_CLIENT_ID", "")
+    return {"Client-ID": client_id, "Authorization": f"Bearer {tok}"}
+
+def handle_accountage(username: str, args: str, context: CommandContext) -> str:
+    target = (args.strip() or username).strip().lstrip("@").lower()
+    headers = _twitch_headers_app()
+    try:
+        r = requests.get(
+            "https://api.twitch.tv/helix/users",
+            headers=headers,
+            params={"login": target},
+            timeout=10,
+        )
+        if r.status_code != 200:
+            return f"Unable to fetch account age for {target}"
+        data = (r.json().get("data") or [])
+        if not data:
+            return f"User not found: {target}"
+        created_at = data[0].get("created_at")
+        if not created_at:
+            return f"Account age unavailable for {target}"
+        dt = datetime.strptime(created_at, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        now = datetime.now(timezone.utc)
+        age = (now - dt).total_seconds()
+        return f"{target} was created {_fmt_age(age)} ago."
+    except Exception:
+        return f"Unable to fetch account age for {target}"
+
+def handle_followage(username: str, args: str, context: CommandContext) -> str:
+    target = (args.strip() or username).strip().lstrip("@").lower()
+    headers = _twitch_headers_app()
+    try:
+        ru = requests.get(
+            "https://api.twitch.tv/helix/users",
+            headers=headers,
+            params={"login": target},
+            timeout=10,
+        )
+        du = ru.json().get("data") or []
+        if not du:
+            return f"User not found: {target}"
+        from_id = du[0].get("id")
+        from MedlarTV.core.stream_management import get_broadcaster_id
+        to_id = get_broadcaster_id()
+        rf = requests.get(
+            "https://api.twitch.tv/helix/users/follows",
+            headers=headers,
+            params={"from_id": from_id, "to_id": to_id},
+            timeout=10,
+        )
+        data = rf.json().get("data") or []
+        channel = os.getenv("TWITCH_CHANNEL", "#devilmedlar").lstrip("#")
+        if not data:
+            return f"{target} is not following {channel}"
+        followed_at = data[0].get("followed_at")
+        dt = datetime.strptime(followed_at, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        now = datetime.now(timezone.utc)
+        age = (now - dt).total_seconds()
+        return f"{target} has been following {channel} for {_fmt_age(age)}"
+    except Exception:
+        return "Followage unavailable"
+
+
+_COUNTERS_FILE = Path(__file__).resolve().parents[1] / "config" / "counters.yaml"
+
+def _load_counters() -> Dict[str, Any]:
+    try:
+        if not _COUNTERS_FILE.exists():
+            return {"counters": {}}
+        with _COUNTERS_FILE.open("r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+            return data
+    except Exception:
+        return {"counters": {}}
+
+def _save_counters(data: Dict[str, Any]) -> None:
+    try:
+        _COUNTERS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with _COUNTERS_FILE.open("w", encoding="utf-8") as f:
+            yaml.safe_dump(data, f)
+    except Exception:
+        pass
+
+def handle_death(username: str, args: str, context: CommandContext) -> str:
+    data = _load_counters()
+    c = data.setdefault("counters", {})
+    c["death"] = int(c.get("death", 0)) + 1
+    _save_counters(data)
+    return f"Has died {c['death']} times devilmeSAD"
+
+def handle_deathreset(username: str, args: str, context: CommandContext) -> str:
+    data = _load_counters()
+    c = data.setdefault("counters", {})
+    c["death"] = 0
+    _save_counters(data)
+    return "Death Count has been set to 0 devilmeSUS"
+
+def handle_deathhash(username: str, args: str, context: CommandContext) -> str:
+    data = _load_counters()
+    c = data.setdefault("counters", {})
+    val = int(c.get("death", 0))
+    return f"DevilMedlar has died {val} so far! devilmeRAGE"
+
+def handle_dadjoke(username: str, args: str, context: CommandContext) -> str:
+    try:
+        r = requests.get("https://icanhazdadjoke.com/", headers={"Accept": "text/plain"}, timeout=10)
+        if r.status_code == 200:
+            return r.text.strip()
+    except Exception:
+        pass
+    return "No dad joke found."
+
+def handle_luck(username: str, args: str, context: CommandContext) -> str:
+    pct = random.randint(0, 100)
+    return f"{username} is {pct}% lucky."
+
+def handle_discord(username: str, args: str, context: CommandContext) -> str:
+    return "https://discord.gg/6VwgAwu7y"
+
+def handle_lurk(username: str, args: str, context: CommandContext) -> str:
+    return f"devilmeLURK {username} is hiding from the demons! devilmeLURK"
 
 # =============================================================================
 # COMMAND REGISTRY / PERMISSIONS
@@ -587,5 +860,117 @@ COMMAND_REGISTRY: Dict[str, Dict[str, Any]] = {
         "handler": handle_commands,
         "permissions": [PERMISSION_EVERYONE],
         "description": "Show all available commands",
+    },
+    "tip": {
+        "handler": handle_tip,
+        "permissions": [PERMISSION_EVERYONE],
+        "description": "Link to tip page",
+        "usage": "!tip",
+    },
+    "roulette": {
+        "handler": handle_roulette,
+        "permissions": [PERMISSION_EVERYONE],
+        "description": "Play Russian Roulette",
+        "usage": "!roulette",
+    },
+    "8ball": {
+        "handler": handle_8ball,
+        "permissions": [PERMISSION_EVERYONE],
+        "description": "Magic 8 Ball response",
+        "usage": "!8ball <question>",
+    },
+    "coinflip": {
+        "handler": handle_coinflip,
+        "permissions": [PERMISSION_EVERYONE],
+        "description": "Flip a coin",
+        "usage": "!coinflip",
+    },
+    "diceroll": {
+        "handler": handle_diceroll,
+        "permissions": [PERMISSION_EVERYONE],
+        "description": "Roll a die",
+        "usage": "!diceroll [sides]",
+    },
+    "catfact": {
+        "handler": handle_catfact,
+        "permissions": [PERMISSION_EVERYONE],
+        "description": "Random cat fact",
+    },
+    "dogfact": {
+        "handler": handle_dogfact,
+        "permissions": [PERMISSION_EVERYONE],
+        "description": "Random dog fact",
+    },
+    "funfact": {
+        "handler": handle_funfact,
+        "permissions": [PERMISSION_EVERYONE],
+        "description": "Random fun fact",
+    },
+    "joke": {
+        "handler": handle_joke,
+        "permissions": [PERMISSION_EVERYONE],
+        "description": "Random joke",
+    },
+    "chucknorris": {
+        "handler": handle_chucknorris,
+        "permissions": [PERMISSION_EVERYONE],
+        "description": "Random Chuck Norris joke",
+    },
+    "watchtime": {
+        "handler": handle_watchtime,
+        "permissions": [PERMISSION_EVERYONE],
+        "description": "Show viewer watch time (session)",
+    },
+    "uptime": {
+        "handler": handle_uptime,
+        "permissions": [PERMISSION_EVERYONE],
+        "description": "Show current stream uptime",
+    },
+    "accountage": {
+        "handler": handle_accountage,
+        "permissions": [PERMISSION_EVERYONE],
+        "description": "Show a user's account age",
+        "usage": "!accountage [username]",
+    },
+    "followage": {
+        "handler": handle_followage,
+        "permissions": [PERMISSION_EVERYONE],
+        "description": "Show how long a user has followed the channel",
+        "usage": "!followage [username]",
+    },
+    "death": {
+        "handler": handle_death,
+        "permissions": [PERMISSION_EVERYONE],
+        "description": "Increment death counter",
+    },
+    "deathreset": {
+        "handler": handle_deathreset,
+        "permissions": [PERMISSION_PILOT],
+        "description": "Reset death counter",
+    },
+    "death#": {
+        "handler": handle_deathhash,
+        "permissions": [PERMISSION_EVERYONE],
+        "description": "Show deaths so far",
+    },
+    "dadjoke": {
+        "handler": handle_dadjoke,
+        "permissions": [PERMISSION_EVERYONE],
+        "description": "Random dad joke",
+    },
+    "luck": {
+        "handler": handle_luck,
+        "permissions": [PERMISSION_EVERYONE],
+        "description": "Show luck percentage",
+    },
+    "discord": {
+        "handler": handle_discord,
+        "permissions": [PERMISSION_EVERYONE],
+        "description": "Discord invite link",
+    },
+    "lurk": {
+        "handler": handle_lurk,
+        "permissions": [PERMISSION_EVERYONE],
+        "description": "Announce lurk message",
     },
 }

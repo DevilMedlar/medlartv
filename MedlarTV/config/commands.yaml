@@ -38,6 +38,122 @@ commands:
     description: "Wikipedia lookup"
     usage: "!wiki <topic>"
 
+  tip:
+    response: "You can tip to DevilMedlar by copy and paste this: https://soundalerts.com/@devilmedlar"
+    allowed_roles: ["everybody"]
+    description: "Link to tip page"
+    usage: "!tip"
+
+  roulette:
+    response: "Plays Russian Roulette with your trusty revolver."
+    allowed_roles: ["everybody"]
+    description: "Play Russian Roulette"
+    usage: "!roulette"
+
+  8ball:
+    response: "Returns a Magic 8 Ball response to your question."
+    allowed_roles: ["everybody"]
+    description: "Magic 8 Ball response"
+    usage: "!8ball <question>"
+
+  coinflip:
+    response: "Head or Tails — Find it out by flipping the coin."
+    allowed_roles: ["everybody"]
+    description: "Flip a coin"
+    usage: "!coinflip"
+
+  diceroll:
+    response: "Returns a random dice roll, defaults to 6-sided."
+    allowed_roles: ["everybody"]
+    description: "Roll a die"
+    usage: "!diceroll [sides]"
+
+  catfact:
+    response: "Learn something new about cats!"
+    allowed_roles: ["everybody"]
+    description: "Random cat fact"
+
+  dogfact:
+    response: "Learn something new about dogs!"
+    allowed_roles: ["everybody"]
+    description: "Random dog fact"
+
+  funfact:
+    response: "Returns a random fun fact."
+    allowed_roles: ["everybody"]
+    description: "Random fun fact"
+
+  joke:
+    response: "Returns a random joke."
+    allowed_roles: ["everybody"]
+    description: "Random joke"
+
+
+  chucknorris:
+    response: "Learn something about the man, the myth, the legend."
+    allowed_roles: ["everybody"]
+    description: "Random Chuck Norris joke"
+
+  uptime:
+    response: "${channel} has been streaming for 2 hours 20 mins"
+    allowed_roles: ["everybody"]
+    description: "Show current stream uptime"
+    usage: "!uptime"
+
+  watchtime:
+    response: "${user} has spent ${user.time_online['0 seconds']} watching ${channel}"
+    allowed_roles: ["everybody"]
+    description: "Show viewer watch time (session)"
+    usage: "!watchtime"
+
+  accountage:
+    response: "${user} was created 1 year 5 months 27 days 1 hour ago."
+    allowed_roles: ["everybody"]
+    description: "Show a user's account age"
+    usage: "!accountage [username]"
+
+  followage:
+    response: "${user1} has been following ${user2} for 1 year 5 months 27 days 1 hour"
+    allowed_roles: ["everybody"]
+    description: "Show how long a user has followed the channel"
+    usage: "!followage [username]"
+
+
+  death:
+    response: "Has died $(count death) times devilmeSAD"
+    allowed_roles: ["everybody"]
+    description: "Increment death counter"
+
+  deathreset:
+    response: "Death Count has been set to $(count death 0) devilmeSUS"
+    allowed_roles: ["pilot", "mod"]
+    description: "Reset death counter"
+
+  death#:
+    response: "DevilMedlar has died $(getcount death) so far! devilmeRAGE"
+    allowed_roles: ["everybody"]
+    description: "Show deaths so far"
+
+  dadjoke:
+    response: "Returns a random dad joke."
+    allowed_roles: ["everybody"]
+    description: "Random dad joke"
+
+  luck:
+    response: "${user.name} is ${random(0-100)}% lucky."
+    allowed_roles: ["everybody"]
+    description: "Luck percentage"
+
+  discord:
+    response: "https://discord.gg/6VwgAwu7y"
+    allowed_roles: ["everybody"]
+    description: "Discord invite link"
+
+  lurk:
+    response: "devilmeLURK ${user.name} is hiding from the demons! devilmeLURK"
+    allowed_roles: ["everybody"]
+    description: "Announce lurk message"
+
   hello:
     response: "Hey {user}! 👋 Ready for action."
     allowed_roles: ["everybody"]
