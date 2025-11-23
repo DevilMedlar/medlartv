@@ -26,6 +26,7 @@ Any other module should continue to work with these functions.
 from __future__ import annotations
 
 import logging
+import os
 import time
 from pathlib import Path
 from typing import Dict, Any, Optional, Tuple
@@ -36,7 +37,9 @@ import yaml  # type: ignore
 log = logging.getLogger("emotions")
 log.setLevel(logging.DEBUG)
 
-print("[DEBUG emotions] emotional_system.py loaded")
+DEBUG = os.getenv("MEDLARTV_DEBUG", "false").lower() == "true"
+if DEBUG:
+    print("[DEBUG emotions] emotional_system.py loaded")
 
 # ---------------------------------------------------------------------------
 # Paths & Config Helpers
@@ -90,6 +93,10 @@ DEFAULT_EMOTIONS: Dict[str, Dict[str, Any]] = {
     "connected":   {"baseline": 0.5, "decay": 0.97},
     "pride":       {"baseline": 0.2, "decay": 0.95},
     "jealousy":    {"baseline": 0.05, "decay": 0.96},
+    "affection":   {"baseline": 0.3, "decay": 0.97},
+    "romance":     {"baseline": 0.2, "decay": 0.96},
+    "attraction":  {"baseline": 0.2, "decay": 0.95},
+    "arousal":     {"baseline": 0.05, "decay": 0.90},
 }
 
 # Fallback decay if not specified anywhere
@@ -142,6 +149,25 @@ EMOTION_INFLUENCES: Dict[str, Dict[str, float]] = {
     "pride": {
         "happiness": 0.2,
         "excitement": 0.2,
+    },
+    "affection": {
+        "connected": 0.3,
+        "happiness": 0.2,
+        "excitement": 0.1,
+    },
+    "romance": {
+        "connected": 0.3,
+        "happiness": 0.2,
+    },
+    "attraction": {
+        "connected": 0.2,
+        "excitement": 0.2,
+        "pride": 0.1,
+    },
+    "arousal": {
+        "excitement": 0.4,
+        "energetic": 0.3,
+        "chill": -0.2,
     },
 }
 
@@ -365,7 +391,8 @@ class EmotionalSystem:
         self._init_from_config()
 
         log.debug("[Emotions] __init__ complete. Baselines=%s", self._baselines)
-        print(f"[DEBUG emotions] EmotionalSystem.__init__ baselines={self._baselines}")
+        if DEBUG:
+            print(f"[DEBUG emotions] EmotionalSystem.__init__ baselines={self._baselines}")
 
     # --------------------------- Setup -----------------------------
 
@@ -470,7 +497,7 @@ class EmotionalSystem:
                 # Negative sentiment: focus on negative-leaning emotions.
                 # Neutral: let specific emotion scores drive the changes.
                 if sentiment >= 0.25:
-                    if name in ("happiness", "excitement", "supportive", "connected", "pride", "energetic"):
+                    if name in ("happiness", "excitement", "supportive", "connected", "pride", "energetic", "affection", "romance", "attraction", "arousal"):
                         delta = base_mag * score
                     elif name in ("sadness", "anger", "fear", "lonely", "stressed", "tired", "jealousy"):
                         delta = -base_mag * score * 0.5
@@ -479,7 +506,7 @@ class EmotionalSystem:
                 elif sentiment <= -0.25:
                     if name in ("sadness", "anger", "fear", "lonely", "stressed", "jealousy"):
                         delta = base_mag * score
-                    elif name in ("happiness", "excitement", "supportive", "connected", "pride", "energetic"):
+                    elif name in ("happiness", "excitement", "supportive", "connected", "pride", "energetic", "affection", "romance", "attraction", "arousal"):
                         delta = -base_mag * score * 0.5
                     else:
                         delta = base_mag * (score - 0.4)
@@ -534,41 +561,50 @@ class EmotionalSystem:
 
         Returns a diagnostic dict with sentiment, severity, and new emotion snapshot.
         """
-        print(f"[DEBUG emotions] process_message() called with message='{message}' username={username}")
+        if DEBUG:
+            print(f"[DEBUG emotions] process_message() called with message='{message}' username={username}")
 
         prev_dom = self.get_dominant_emotion()
         # 1) Decay toward baseline first
         self.apply_decay()
-        print(f"[DEBUG emotions] After decay: {self._emotions}")
+        if DEBUG:
+            print(f"[DEBUG emotions] After decay: {self._emotions}")
 
         # 2) Analyze sentiment & per-emotion scores
         sentiment, emotion_scores = _analyze_message(message)
-        print(f"[DEBUG emotions] Sentiment={sentiment}, emotion_scores={emotion_scores}")
+        if DEBUG:
+            print(f"[DEBUG emotions] Sentiment={sentiment}, emotion_scores={emotion_scores}")
 
         # 3) Estimate severity 1–4
         severity = _estimate_severity(sentiment, emotion_scores, message)
-        print(f"[DEBUG emotions] Severity estimated={severity}")
+        if DEBUG:
+            print(f"[DEBUG emotions] Severity estimated={severity}")
 
         # 4) Compute raw deltas
         deltas = self._compute_deltas_from_scores(sentiment, emotion_scores, severity)
-        print(f"[DEBUG emotions] Raw deltas={deltas}")
+        if DEBUG:
+            print(f"[DEBUG emotions] Raw deltas={deltas}")
 
         # 5) Apply personality multipliers
         deltas = self._apply_personality(deltas)
-        print(f"[DEBUG emotions] Personality-adjusted deltas={deltas}")
+        if DEBUG:
+            print(f"[DEBUG emotions] Personality-adjusted deltas={deltas}")
 
         # 6) Apply the deltas
         self._apply_deltas(deltas)
-        print(f"[DEBUG emotions] After applying deltas: {self._emotions}")
+        if DEBUG:
+            print(f"[DEBUG emotions] After applying deltas: {self._emotions}")
 
         # 7) Ripple through influence graph
         self.apply_influences()
-        print(f"[DEBUG emotions] After influences: {self._emotions}")
+        if DEBUG:
+            print(f"[DEBUG emotions] After influences: {self._emotions}")
 
         self.last_update = time.time()
 
         snapshot = self.emotions
-        print(f"[DEBUG emotions] Final snapshot returned: {snapshot}")
+        if DEBUG:
+            print(f"[DEBUG emotions] Final snapshot returned: {snapshot}")
 
         try:
             new_dom = self.get_dominant_emotion()
@@ -671,13 +707,16 @@ _emotional_system: Optional[EmotionalSystem] = None
 
 def get_emotional_system() -> EmotionalSystem:
     global _emotional_system
-    print("[DEBUG emotions] get_emotional_system() called")
+    if DEBUG:
+        print("[DEBUG emotions] get_emotional_system() called")
     if _emotional_system is None:
-        print("[DEBUG emotions] No existing EmotionalSystem, creating new one...")
+        if DEBUG:
+            print("[DEBUG emotions] No existing EmotionalSystem, creating new one...")
         _emotional_system = EmotionalSystem()
         log.info("[Emotions] Emotional system created")
     else:
-        print("[DEBUG emotions] Reusing existing EmotionalSystem instance")
+        if DEBUG:
+            print("[DEBUG emotions] Reusing existing EmotionalSystem instance")
     return _emotional_system
 
 def process_chat_emotion(message: str, username: Optional[str] = None) -> Dict[str, Any]:

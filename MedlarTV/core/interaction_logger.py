@@ -1,11 +1,13 @@
-print("[DEBUG interaction_logger] Loaded interaction_logger.py")
+import os
+DEBUG = os.getenv("MEDLARTV_DEBUG", "false").lower() == "true"
+if DEBUG:
+    print("[DEBUG interaction_logger] Loaded interaction_logger.py")
 
 """
 MedlarTV Interaction Logger
 Logs chat interactions, commands, mood changes, and errors for analytics.
 """
 
-import os
 import json
 from datetime import datetime
 from pathlib import Path
@@ -18,7 +20,8 @@ LOG_DIRECTORY = os.getenv("LOG_DIRECTORY", "logs")
 def _now_iso() -> str:
     """Return current UTC time in ISO format."""
     ts = datetime.utcnow().isoformat() + "Z"
-    print(f"[DEBUG interaction_logger] _now_iso() → {ts}")
+    if DEBUG:
+        print(f"[DEBUG interaction_logger] _now_iso() → {ts}")
     return ts
 
 def ensure_log_directory() -> Path:
@@ -26,13 +29,16 @@ def ensure_log_directory() -> Path:
     Ensure the log directory exists and return it as a Path object.
     """
     log_path = Path(LOG_DIRECTORY)
-    print(f"[DEBUG interaction_logger] ensure_log_directory() using path={log_path}")
+    if DEBUG:
+        print(f"[DEBUG interaction_logger] ensure_log_directory() using path={log_path}")
     log_path.mkdir(parents=True, exist_ok=True)
-    print(f"[DEBUG interaction_logger] Directory ensured: {log_path.exists()}")
+    if DEBUG:
+        print(f"[DEBUG interaction_logger] Directory ensured: {log_path.exists()}")
     return log_path
 
 def _append_jsonl(filename: str, entry: Dict[str, Any]) -> None:
-    print(f"[DEBUG interaction_logger] _append_jsonl() called for file={filename}")
+    if DEBUG:
+        print(f"[DEBUG interaction_logger] _append_jsonl() called for file={filename}")
     """
     Append a single JSON object as a line to a .jsonl log file.
     """
@@ -41,17 +47,20 @@ def _append_jsonl(filename: str, entry: Dict[str, Any]) -> None:
 
     try:
         log_path = ensure_log_directory()
-        print(f"[DEBUG interaction_logger] Logging path resolved → {log_path}")
+        if DEBUG:
+            print(f"[DEBUG interaction_logger] Logging path resolved → {log_path}")
         log_file = log_path / filename
 
-        print(f"[DEBUG interaction_logger] Writing entry to {log_file}")
-        print(f"[DEBUG interaction_logger] Entry data: {entry}")
+        if DEBUG:
+            print(f"[DEBUG interaction_logger] Writing entry to {log_file}")
+            print(f"[DEBUG interaction_logger] Entry data: {entry}")
 
         with log_file.open("a", encoding="utf-8") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
     except Exception as e:
-        print(f"[DEBUG interaction_logger] ERROR inside _append_jsonl: {e}")
+        if DEBUG:
+            print(f"[DEBUG interaction_logger] ERROR inside _append_jsonl: {e}")
         print(f"[Logger] Failed to write to {filename}: {e}")
 
 # ---------------------------------------------------------------------------
@@ -65,7 +74,8 @@ def log_interaction(
     mood: Optional[str] = None,
     context: Optional[Dict[str, Any]] = None,
 ) -> None:
-    print(f"[DEBUG interaction_logger] log_interaction() user={user} message={message} mood={mood}")
+    if DEBUG:
+        print(f"[DEBUG interaction_logger] log_interaction() user={user} message={message} mood={mood}")
     """
     Log a basic chat interaction between a user and MedlarTV.
     """
@@ -83,7 +93,8 @@ def log_interaction(
     if context:
         entry["context"] = context
 
-    print(f"[DEBUG interaction_logger] log_interaction() entry={entry}")
+    if DEBUG:
+        print(f"[DEBUG interaction_logger] log_interaction() entry={entry}")
     _append_jsonl("interactions.jsonl", entry)
 
 def log_command(
@@ -93,7 +104,8 @@ def log_command(
     success: bool = True,
     error: Optional[str] = None,
 ) -> None:
-    print(f"[DEBUG interaction_logger] log_command() user={user} command={command} success={success}")
+    if DEBUG:
+        print(f"[DEBUG interaction_logger] log_command() user={user} command={command} success={success}")
     """
     Log a command invocation (e.g., !title, !so).
     """
@@ -112,7 +124,8 @@ def log_command(
     if error:
         entry["error"] = error
 
-    print(f"[DEBUG interaction_logger] log_command() entry={entry}")
+    if DEBUG:
+        print(f"[DEBUG interaction_logger] log_command() entry={entry}")
     _append_jsonl("commands.jsonl", entry)
 
 def log_mood_change(
@@ -121,7 +134,8 @@ def log_mood_change(
     reason: str,
     extra: Optional[Dict[str, Any]] = None,
 ) -> None:
-    print(f"[DEBUG interaction_logger] log_mood_change() {old_mood} → {new_mood}, reason={reason}")
+    if DEBUG:
+        print(f"[DEBUG interaction_logger] log_mood_change() {old_mood} → {new_mood}, reason={reason}")
     """
     Log when the emotional system changes dominant mood.
     """
@@ -138,7 +152,8 @@ def log_mood_change(
     if extra:
         entry["extra"] = extra
 
-    print(f"[DEBUG interaction_logger] log_mood_change() entry={entry}")
+    if DEBUG:
+        print(f"[DEBUG interaction_logger] log_mood_change() entry={entry}")
     _append_jsonl("mood_changes.jsonl", entry)
 
 def log_error(
@@ -146,7 +161,8 @@ def log_error(
     error_message: str,
     context: Optional[Dict[str, Any]] = None,
 ) -> None:
-    print(f"[DEBUG interaction_logger] log_error() type={error_type} msg={error_message}")
+    if DEBUG:
+        print(f"[DEBUG interaction_logger] log_error() type={error_type} msg={error_message}")
     """
     Log an internal error for debugging.
     """
@@ -162,12 +178,14 @@ def log_error(
     if context:
         entry["context"] = context
 
-    print(f"[DEBUG interaction_logger] log_error() entry={entry}")
+    if DEBUG:
+        print(f"[DEBUG interaction_logger] log_error() entry={entry}")
     _append_jsonl("errors.jsonl", entry)
 
 
 def get_interaction_stats() -> Dict[str, Any]:
-    print("[DEBUG interaction_logger] get_interaction_stats() called")
+    if DEBUG:
+        print("[DEBUG interaction_logger] get_interaction_stats() called")
     """
     Basic stats summary based on log file counts.
     """
@@ -190,13 +208,16 @@ def get_interaction_stats() -> Dict[str, Any]:
         for filename, key in files.items():
             fpath = log_path / filename
             if fpath.exists():
-                print(f"[DEBUG interaction_logger] Counting lines in → {fpath}")
+                if DEBUG:
+                    print(f"[DEBUG interaction_logger] Counting lines in → {fpath}")
                 with fpath.open("r", encoding="utf-8") as f:
                     stats[key] = sum(1 for _ in f)
-                print(f"[DEBUG interaction_logger] {key} count updated → {stats[key]}")
+                if DEBUG:
+                    print(f"[DEBUG interaction_logger] {key} count updated → {stats[key]}")
 
     except Exception as e:
-        print(f"[DEBUG interaction_logger] ERROR in get_interaction_stats: {e}")
+        if DEBUG:
+            print(f"[DEBUG interaction_logger] ERROR in get_interaction_stats: {e}")
         print(f"[Logger] Failed to compute stats: {e}")
 
     return stats
@@ -213,3 +234,4 @@ if __name__ == "__main__":
     log_error("test_error", "Something went wrong", {"foo": "bar"})
     print(json.dumps(get_interaction_stats(), indent=2))
     print("[Logger] Self-test complete.")
+ 

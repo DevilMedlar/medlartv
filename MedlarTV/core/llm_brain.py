@@ -1,6 +1,7 @@
-print("[DEBUG llm_brain] Loaded llm_brain.py")
-
 import os
+DEBUG = os.getenv("MEDLARTV_DEBUG", "false").lower() == "true"
+if DEBUG:
+    print("[DEBUG llm_brain] Loaded llm_brain.py")
 import logging
 from typing import List, Dict, Any, Optional
 
@@ -51,18 +52,21 @@ def _safe_load_yaml(path: Path) -> Dict[str, Any]:
     try:
         with path.open("r", encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
-            print(f"[DEBUG llm_brain] _safe_load_yaml() loaded from {path}, keys={list(data.keys())}")
+            if DEBUG:
+                print(f"[DEBUG llm_brain] _safe_load_yaml() loaded from {path}, keys={list(data.keys())}")
             return data
     except Exception as e:
         log.error(f"[LLM] Failed to load YAML {path}: {e}")
-        print(f"[DEBUG llm_brain] _safe_load_yaml() ERROR {e}")
+        if DEBUG:
+            print(f"[DEBUG llm_brain] _safe_load_yaml() ERROR {e}")
         return {}
 
 
 def _load_personality() -> Dict[str, Any]:
     data = _safe_load_yaml(CONFIG_DIR / "personality.yaml")
     personality = data.get("personality", data) if isinstance(data, dict) else {}
-    print(f"[DEBUG llm_brain] _load_personality() → keys={list(personality.keys())}")
+    if DEBUG:
+        print(f"[DEBUG llm_brain] _load_personality() → keys={list(personality.keys())}")
     return personality
 
 
@@ -91,7 +95,8 @@ def _build_system_prompt(personality: Dict[str, Any]) -> str:
     ]
 
     system_prompt = "\n".join(f"- {r}" for r in rules)
-    print(f"[DEBUG llm_brain] _build_system_prompt() built prompt with {len(rules)} rules")
+    if DEBUG:
+        print(f"[DEBUG llm_brain] _build_system_prompt() built prompt with {len(rules)} rules")
     return system_prompt
 
 
@@ -123,7 +128,8 @@ def _estimate_severity(message: str, emotion_scores: Dict[str, float]) -> int:
     else:
         sev = 1
 
-    print(f"[DEBUG llm_brain] _estimate_severity() max_score={max_score} → severity={sev}")
+    if DEBUG:
+        print(f"[DEBUG llm_brain] _estimate_severity() max_score={max_score} → severity={sev}")
     return sev
 
 
@@ -132,22 +138,27 @@ def _estimate_severity(message: str, emotion_scores: Dict[str, float]) -> int:
 # ---------------------------------------------------------------------
 
 def _append_history(role: str, content: str) -> None:
-    print(f"[DEBUG llm_brain] _append_history() role={role!r} content_preview={content[:80]!r}")
-    print(f"[DEBUG llm_brain] history_size_before={len(_conversation_history)}")
+    if DEBUG:
+        print(f"[DEBUG llm_brain] _append_history() role={role!r} content_preview={content[:80]!r}")
+        print(f"[DEBUG llm_brain] history_size_before={len(_conversation_history)}")
 
     _conversation_history.append({"role": role, "content": content})
 
     if len(_conversation_history) > MAX_HISTORY:
-        print(f"[DEBUG llm_brain] trimming history: MAX_HISTORY={MAX_HISTORY}")
+        if DEBUG:
+            print(f"[DEBUG llm_brain] trimming history: MAX_HISTORY={MAX_HISTORY}")
         del _conversation_history[0 : len(_conversation_history) - MAX_HISTORY]
 
-    print(f"[DEBUG llm_brain] history_size_after={len(_conversation_history)}")
+    if DEBUG:
+        print(f"[DEBUG llm_brain] history_size_after={len(_conversation_history)}")
 
 
 def clear_history() -> None:
-    print(f"[DEBUG llm_brain] clear_history() called, old_len={len(_conversation_history)}")
+    if DEBUG:
+        print(f"[DEBUG llm_brain] clear_history() called, old_len={len(_conversation_history)}")
     _conversation_history.clear()
-    print("[DEBUG llm_brain] clear_history() completed, new_len=0")
+    if DEBUG:
+        print("[DEBUG llm_brain] clear_history() completed, new_len=0")
 
 
 # ---------------------------------------------------------------------
@@ -155,13 +166,16 @@ def clear_history() -> None:
 # ---------------------------------------------------------------------
 
 def check_ollama_health() -> bool:
-    print("[DEBUG llm_brain] check_ollama_health() called")
+    if DEBUG:
+        print("[DEBUG llm_brain] check_ollama_health() called")
     try:
         resp = requests.get(f"{OLLAMA_HOST}/api/tags", timeout=5)
-        print(f"[DEBUG llm_brain] health_check_status={resp.status_code}")
+        if DEBUG:
+            print(f"[DEBUG llm_brain] health_check_status={resp.status_code}")
         return resp.status_code == 200
     except Exception as e:
-        print(f"[DEBUG llm_brain] check_ollama_health() exception: {e}")
+        if DEBUG:
+            print(f"[DEBUG llm_brain] check_ollama_health() exception: {e}")
         return False
 
 
@@ -177,7 +191,8 @@ def _build_ollama_messages(
     mood_context: Dict[str, Any],
 ) -> List[Dict[str, str]]:
 
-    print(f"[DEBUG llm_brain] _build_ollama_messages() user={username!r} msg={user_message!r}")
+    if DEBUG:
+        print(f"[DEBUG llm_brain] _build_ollama_messages() user={username!r} msg={user_message!r}")
 
     emotions = emotional_context.get("emotions", {})
     mood_label = mood_context.get("label", "Neutral")
@@ -208,14 +223,16 @@ def _build_ollama_messages(
         {"role": "system", "content": context_instructions},
     ]
 
-    print(f"[DEBUG llm_brain] existing_history_len={len(_conversation_history)}")
+    if DEBUG:
+        print(f"[DEBUG llm_brain] existing_history_len={len(_conversation_history)}")
     messages.extend(_conversation_history)
 
     messages.append(
         {"role": "user", "content": f"{username}: {user_message}"}
     )
 
-    print(f"[DEBUG llm_brain] _build_ollama_messages() final_count={len(messages)}")
+    if DEBUG:
+        print(f"[DEBUG llm_brain] _build_ollama_messages() final_count={len(messages)}")
     return messages
 
 
@@ -224,7 +241,8 @@ def _build_ollama_messages(
 # ---------------------------------------------------------------------
 
 def _call_ollama_chat(messages: List[Dict[str, str]], temperature: float = 0.8) -> str:
-    print(f"[DEBUG llm_brain] _call_ollama_chat() called with {len(messages)} messages, temp={temperature}")
+    if DEBUG:
+        print(f"[DEBUG llm_brain] _call_ollama_chat() called with {len(messages)} messages, temp={temperature}")
     url = f"{OLLAMA_HOST}/api/chat"
     payload = {
         "model": OLLAMA_MODEL,
@@ -234,22 +252,26 @@ def _call_ollama_chat(messages: List[Dict[str, str]], temperature: float = 0.8) 
     }
 
     try:
-        print("[DEBUG llm_brain] sending request to Ollama...")
+        if DEBUG:
+            print("[DEBUG llm_brain] sending request to Ollama...")
         resp = requests.post(url, json=payload, timeout=120)
     except Exception as e:
         log.error(f"[LLM] Failed to reach Ollama: {e}")
-        print(f"[DEBUG llm_brain] _call_ollama_chat() exception: {e}")
+        if DEBUG:
+            print(f"[DEBUG llm_brain] _call_ollama_chat() exception: {e}")
         return "I’m having trouble thinking right now, my brain server might be down 😅"
 
     if resp.status_code != 200:
         err_text = resp.text[:500]
         log.error(f"[LLM] Ollama returned {resp.status_code}: {err_text}")
-        print(f"[DEBUG llm_brain] _call_ollama_chat() non-200 status={resp.status_code}")
+        if DEBUG:
+            print(f"[DEBUG llm_brain] _call_ollama_chat() non-200 status={resp.status_code}")
 
         # Fallback: if model is missing, try a default known-good tag
         if "not found" in err_text.lower() and OLLAMA_MODEL.lower() != "llama3":
             try:
-                print("[DEBUG llm_brain] attempting fallback model 'llama3'")
+                if DEBUG:
+                    print("[DEBUG llm_brain] attempting fallback model 'llama3'")
                 fallback_payload = dict(payload)
                 fallback_payload["model"] = "llama3"
                 resp2 = requests.post(url, json=fallback_payload, timeout=120)
@@ -264,28 +286,34 @@ def _call_ollama_chat(messages: List[Dict[str, str]], temperature: float = 0.8) 
                             pass
                     return str(data2)[:500]
             except Exception as e:
-                print(f"[DEBUG llm_brain] fallback call exception: {e}")
+                if DEBUG:
+                    print(f"[DEBUG llm_brain] fallback call exception: {e}")
 
         return "I tried to respond, but my brain backend is cranky right now."
 
-    print(f"[DEBUG llm_brain] Ollama responded status={resp.status_code}")
+    if DEBUG:
+        print(f"[DEBUG llm_brain] Ollama responded status={resp.status_code}")
     data = resp.json()
 
     if isinstance(data, dict) and "message" in data:
         text = data["message"].get("content", "").strip()
-        print(f"[DEBUG llm_brain] _call_ollama_chat() primary_format length={len(text)}")
+        if DEBUG:
+            print(f"[DEBUG llm_brain] _call_ollama_chat() primary_format length={len(text)}")
         return text
 
     if isinstance(data, dict) and "choices" in data:
         try:
             text = data["choices"][0]["message"]["content"].strip()
-            print(f"[DEBUG llm_brain] _call_ollama_chat() openai_format length={len(text)}")
+            if DEBUG:
+                print(f"[DEBUG llm_brain] _call_ollama_chat() openai_format length={len(text)}")
             return text
         except Exception as e:
-            print(f"[DEBUG llm_brain] _call_ollama_chat() choices parse error: {e}")
+            if DEBUG:
+                print(f"[DEBUG llm_brain] _call_ollama_chat() choices parse error: {e}")
 
     text = str(data)[:500]
-    print(f"[DEBUG llm_brain] _call_ollama_chat() fallback_format length={len(text)}")
+    if DEBUG:
+        print(f"[DEBUG llm_brain] _call_ollama_chat() fallback_format length={len(text)}")
     return text
 
 
@@ -294,61 +322,75 @@ def _call_ollama_chat(messages: List[Dict[str, str]], temperature: float = 0.8) 
 # ---------------------------------------------------------------------
 
 def generate_response(message: str, username: str) -> Optional[str]:
-    print(f"[DEBUG llm_brain] generate_response() called user={username!r} message={message!r}")
+    if DEBUG:
+        print(f"[DEBUG llm_brain] generate_response() called user={username!r} message={message!r}")
 
     message = (message or "").strip()
     if not message:
-        print("[DEBUG llm_brain] generate_response() empty message, returning None")
+        if DEBUG:
+            print("[DEBUG llm_brain] generate_response() empty message, returning None")
         return None
 
     personality = _load_personality()
     system_prompt = _build_system_prompt(personality)
 
-    print("[DEBUG llm_brain] running sentiment analysis...")
+    if DEBUG:
+        print("[DEBUG llm_brain] running sentiment analysis...")
     try:
         sentiment_score, emotion_scores = analyze_sentiment_advanced(message)
     except Exception as e:
         log.error(f"[LLM] Sentiment analysis failed: {e}")
-        print(f"[DEBUG llm_brain] analyze_sentiment_advanced() exception: {e}")
+        if DEBUG:
+            print(f"[DEBUG llm_brain] analyze_sentiment_advanced() exception: {e}")
         sentiment_score = 0.0
         emotion_scores = {}
 
-    print(f"[DEBUG llm_brain] sentiment_score={sentiment_score} emotion_scores={emotion_scores}")
+    if DEBUG:
+        print(f"[DEBUG llm_brain] sentiment_score={sentiment_score} emotion_scores={emotion_scores}")
     severity = _estimate_severity(message, emotion_scores)
-    print(f"[DEBUG llm_brain] severity_level={severity}")
+    if DEBUG:
+        print(f"[DEBUG llm_brain] severity_level={severity}")
 
     emo_system = get_emotional_system()
 
-    print("[DEBUG llm_brain] updating emotional system...")
+    if DEBUG:
+        print("[DEBUG llm_brain] updating emotional system...")
     try:
         emo_system.process_message(message)
     except Exception as e:
         log.error(f"[LLM] Emotional system update failed: {e}")
-        print(f"[DEBUG llm_brain] emo_system.process_message() exception: {e}")
+        if DEBUG:
+            print(f"[DEBUG llm_brain] emo_system.process_message() exception: {e}")
 
     try:
         emotions = get_emotion_state()
     except Exception as e:
-        print(f"[DEBUG llm_brain] get_emotion_state() exception: {e}, trying emo_system.get_emotional_state()")
+        if DEBUG:
+            print(f"[DEBUG llm_brain] get_emotion_state() exception: {e}, trying emo_system.get_emotional_state()")
         try:
             emotions = emo_system.get_emotional_state()
         except Exception as e2:
-            print(f"[DEBUG llm_brain] emo_system.get_emotional_state() exception: {e2}")
+            if DEBUG:
+                print(f"[DEBUG llm_brain] emo_system.get_emotional_state() exception: {e2}")
             emotions = {}
 
-    print(f"[DEBUG llm_brain] emotions_state={emotions}")
+    if DEBUG:
+        print(f"[DEBUG llm_brain] emotions_state={emotions}")
 
-    print(f"[DEBUG llm_brain] computing mood from emotions...")
+    if DEBUG:
+        print(f"[DEBUG llm_brain] computing mood from emotions...")
     try:
         mood_vector = compute_mood(emotions)
         mood_label = mood_vector.get("label") or get_mood_label(mood_vector, emotions)
     except Exception as e:
         log.error(f"[LLM] Mood computation failed: {e}")
-        print(f"[DEBUG llm_brain] compute_mood/get_mood_label exception: {e}")
+        if DEBUG:
+            print(f"[DEBUG llm_brain] compute_mood/get_mood_label exception: {e}")
         mood_vector = {"label": "Neutral", "valence": 0.0, "energy": 0.0, "warmth": 0.5, "snark": 0.3}
         mood_label = "Neutral"
 
-    print(f"[DEBUG llm_brain] mood_vector={mood_vector} mood_label={mood_label}")
+    if DEBUG:
+        print(f"[DEBUG llm_brain] mood_vector={mood_vector} mood_label={mood_label}")
 
     emotional_context = {
         "emotions": emotions,
@@ -357,7 +399,8 @@ def generate_response(message: str, username: str) -> Optional[str]:
     }
     mood_context = {**mood_vector, "label": mood_label}
 
-    print("[DEBUG llm_brain] building ollama messages...")
+    if DEBUG:
+        print("[DEBUG llm_brain] building ollama messages...")
     messages = _build_ollama_messages(
         system_prompt=system_prompt,
         user_message=message,
@@ -366,16 +409,20 @@ def generate_response(message: str, username: str) -> Optional[str]:
         mood_context=mood_context,
     )
 
-    print("[DEBUG llm_brain] calling ollama with messages...")
+    if DEBUG:
+        print("[DEBUG llm_brain] calling ollama with messages...")
     reply = _call_ollama_chat(messages)
 
-    print(f"[DEBUG llm_brain] ollama_reply length={len(reply) if reply else 0}")
+    if DEBUG:
+        print(f"[DEBUG llm_brain] ollama_reply length={len(reply) if reply else 0}")
     if reply:
         _append_history("user", f"{username}: {message}")
         _append_history("assistant", reply.strip())
         log.info(f"[MedlarTV Brain] {username}: {message}")
-        print(f"[DEBUG llm_brain] generate_response() returning reply length={len(reply.strip())}")
+        if DEBUG:
+            print(f"[DEBUG llm_brain] generate_response() returning reply length={len(reply.strip())}")
         return reply.strip()
 
-    print("[DEBUG llm_brain] generate_response() no reply, returning None")
+    if DEBUG:
+        print("[DEBUG llm_brain] generate_response() no reply, returning None")
     return None

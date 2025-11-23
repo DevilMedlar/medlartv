@@ -1,4 +1,7 @@
-print("[DEBUG response_templates] Loaded response_templates.py")
+import os
+DEBUG = os.getenv("MEDLARTV_DEBUG", "false").lower() == "true"
+if DEBUG:
+    print("[DEBUG response_templates] Loaded response_templates.py")
 
 """
 MedlarTV Response Templates
@@ -9,7 +12,8 @@ import random
 
 
 def get_severity_response(severity: int, username: str) -> str:
-    print(f"[DEBUG response_templates] get_severity_response(severity={severity}, username={username!r}) CALLED")
+    if DEBUG:
+        print(f"[DEBUG response_templates] get_severity_response(severity={severity}, username={username!r}) CALLED")
 
     templates = {
         1: [
@@ -34,26 +38,32 @@ def get_severity_response(severity: int, username: str) -> str:
         ],
     }
 
-    print(f"[DEBUG response_templates] severity={severity} checking range 1–4")
+    if DEBUG:
+        print(f"[DEBUG response_templates] severity={severity} checking range 1–4")
 
     if severity not in templates:
-        print(f"[DEBUG response_templates] Invalid severity={severity}, returning fallback")
+        if DEBUG:
+            print(f"[DEBUG response_templates] Invalid severity={severity}, returning fallback")
         return f"{username}, I'm here for you."
 
     chosen_list = templates[severity]
-    print(f"[DEBUG response_templates] Template list size={len(chosen_list)}")
+    if DEBUG:
+        print(f"[DEBUG response_templates] Template list size={len(chosen_list)}")
 
     chosen = random.choice(chosen_list)
-    print(f"[DEBUG response_templates] Selected template={chosen!r}")
+    if DEBUG:
+        print(f"[DEBUG response_templates] Selected template={chosen!r}")
 
     final = chosen.format(user=username)
-    print(f"[DEBUG response_templates] Final output={final!r}")
+    if DEBUG:
+        print(f"[DEBUG response_templates] Final output={final!r}")
 
     return final
 
 
 def get_supportive_message(username: str) -> str:
-    print(f"[DEBUG response_templates] get_supportive_message(username={username!r}) CALLED")
+    if DEBUG:
+        print(f"[DEBUG response_templates] get_supportive_message(username={username!r}) CALLED")
 
     responses = [
         "You're doing your best, {user}. That's enough.",
@@ -61,18 +71,22 @@ def get_supportive_message(username: str) -> str:
         "{user}, things will get better — one step at a time.",
     ]
 
-    print(f"[DEBUG response_templates] total_responses={len(responses)}")
+    if DEBUG:
+        print(f"[DEBUG response_templates] total_responses={len(responses)}")
     chosen = random.choice(responses)
-    print(f"[DEBUG response_templates] chosen_template={chosen!r}")
+    if DEBUG:
+        print(f"[DEBUG response_templates] chosen_template={chosen!r}")
 
     final = chosen.format(user=username)
-    print(f"[DEBUG response_templates] output={final!r}")
+    if DEBUG:
+        print(f"[DEBUG response_templates] output={final!r}")
 
     return final
 
 
 def get_hype_message(username: str) -> str:
-    print(f"[DEBUG response_templates] get_hype_message(username={username!r}) CALLED")
+    if DEBUG:
+        print(f"[DEBUG response_templates] get_hype_message(username={username!r}) CALLED")
 
     options = [
         "LET'S GO {user}!!!",
@@ -80,11 +94,15 @@ def get_hype_message(username: str) -> str:
         "Ayyy {user}!! Big energy!!!",
     ]
 
-    print(f"[DEBUG response_templates] hype_list_size={len(options)}")
+    if DEBUG:
+        print(f"[DEBUG response_templates] hype_list_size={len(options)}")
     chosen = random.choice(options)
-    print(f"[DEBUG response_templates] chosen_hype={chosen!r}")
+    if DEBUG:
+        print(f"[DEBUG response_templates] chosen_hype={chosen!r}")
 
     final = chosen.format(user=username)
-    print(f"[DEBUG response_templates] output={final!r}")
+    if DEBUG:
+        print(f"[DEBUG response_templates] output={final!r}")
 
     return final
+ 

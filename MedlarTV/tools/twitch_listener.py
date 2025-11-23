@@ -100,6 +100,21 @@ def _load_timers_yaml() -> List[Dict[str, Any]]:
     except Exception:
         return []
 
+def _get_commands_link() -> str:
+    try:
+        cfg = Path(__file__).resolve().parents[1] / "config" / "commands.yaml"
+        with cfg.open("r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+        info = (data.get("commands") or {}).get("commands") or {}
+        resp = str(info.get("response", ""))
+        import re
+        m = re.search(r"https?://[^\s]+", resp)
+        if m:
+            return m.group(0)
+    except Exception:
+        pass
+    return os.getenv("MEDLAR_COMMANDS_URL", "https://DevilMedlar.github.io/medlar-commands-site/")
+
 def _prepare_msg(text: str) -> str:
     try:
         return " ".join(text.splitlines())
@@ -165,7 +180,7 @@ def _is_ignored(username: str) -> bool:
     except Exception:
         return False
 
-def _play_local_sound(path: str) -> bool:
+def _play_local_sound(path: str, duration_ms: int = 0) -> bool:
     p = Path(path)
     if not p.exists():
         return False
@@ -175,7 +190,7 @@ def _play_local_sound(path: str) -> bool:
             last = _last_audio_play.get(str(p), 0.0)
             now = time.time()
             delta = now - last
-            if delta < 5.0:
+            if delta < 1.0:
                 try:
                     log.info(f"[SoundEffect] cooldown skip path={str(p)} delta={delta:.2f}s")
                 except Exception:
@@ -206,11 +221,12 @@ def _play_local_sound(path: str) -> bool:
     if p.suffix.lower() in {".mp3", ".m4a", ".aac"}:
         try:
             import subprocess
+            sleep_ms = int(duration_ms) if duration_ms and duration_ms > 0 else 10000
             ps = (
                 "Add-Type -AssemblyName presentationCore; "
                 "$p = New-Object System.Windows.Media.MediaPlayer; "
                 f"$p.Open(\"{str(p)}\"); $p.Volume=1; $p.Play(); "
-                "Start-Sleep -Milliseconds 2500"
+                f"Start-Sleep -Milliseconds {sleep_ms}"
             )
             try:
                 log.info(f"[SoundEffect] playing via MediaPlayer path={str(p)}")
@@ -246,13 +262,38 @@ def _apply_event_rules(event_name: str, username: str, send_message: callable, s
             pass
         return
     rules = _load_event_rules()
-    for r in rules:
+
+    # Exclusive handling: if any rule explicitly targets this username, only run those
+    try:
+        exact_rules = []
+        for rr in rules:
+            if str(rr.get("trigger", "")) != event_name:
+                continue
+            fl = rr.get("filters", {}) or {}
+            eq = str(fl.get("username_equals", ""))
+            if eq and eq.lower() == username.lower():
+                exact_rules.append(rr)
+        if exact_rules:
+            rules_to_run = exact_rules
+        else:
+            rules_to_run = [r for r in rules if str(r.get("trigger", "")) == event_name]
+    except Exception:
+        rules_to_run = [r for r in rules if str(r.get("trigger", "")) == event_name]
+
+    for r in rules_to_run:
         if str(r.get("trigger", "")) != event_name:
             continue
         flt = r.get("filters", {}) or {}
         uname_eq = str(flt.get("username_equals", ""))
         if uname_eq and uname_eq.lower() != username.lower():
             continue
+        try:
+            exclude_list = flt.get("username_not_in", []) or []
+            exclude_norm = set(str(u).lower().lstrip("@") for u in exclude_list)
+            if username.lower().lstrip("@") in exclude_norm:
+                continue
+        except Exception:
+            pass
         effects = r.get("effects", []) or []
         try:
             log.info(f"[Events] trigger={event_name} user={username} matched rule={r.get('name','')} effects={len(effects)}")
@@ -272,7 +313,13 @@ def _apply_event_rules(event_name: str, username: str, send_message: callable, s
             if t == "chat":
                 msg = str(eff.get("message", ""))
                 if msg:
-                    send_message(msg)
+                    try:
+                        formatted = msg
+                        formatted = formatted.replace("@{username}", f"@{username}")
+                        formatted = formatted.replace("{username}", username)
+                    except Exception:
+                        formatted = msg
+                    send_message(formatted)
             elif t == "twitch_shoutout":
                 target = str(eff.get("target", username))
                 try:
@@ -293,7 +340,11 @@ def _apply_event_rules(event_name: str, username: str, send_message: callable, s
             elif t == "play_sound":
                 path = str(eff.get("path", ""))
                 if path:
-                    _play_local_sound(path)
+                    try:
+                        duration_ms = int(eff.get("duration_ms", 0))
+                    except Exception:
+                        duration_ms = 0
+                    _play_local_sound(path, duration_ms)
 
 # ----------------------------------------------------------------------------
 # IRC CLIENT CLASS
@@ -324,6 +375,22 @@ class TwitchIRC:
         self._send_raw(f"NICK {BOT_NICK}")
         self._send_raw(f"JOIN {CHANNEL}")
         self._send_raw("CAP REQ :twitch.tv/commands twitch.tv/tags twitch.tv/membership")
+
+        try:
+            names = _get_active_copilots()
+            for uname in names:
+                n = str(uname).strip().lstrip("@")
+                if not n:
+                    continue
+                chan = f"#{n.lower()}"
+                if chan != CHANNEL:
+                    self._send_raw(f"JOIN {chan}")
+                    try:
+                        log.info("[IRC] Joining copilot channel %s", chan)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
 
         self.connected = True
         log.info(f"[IRC] Connected as {BOT_NICK} to {CHANNEL}")
@@ -564,6 +631,14 @@ class TwitchIRC:
             return
 
         try:
+            key = username.lower()
+            if key not in _arrived_users:
+                _arrived_users.add(key)
+                _apply_event_rules("viewer_arrived", username, self.send_message, self.sock)
+        except Exception:
+            pass
+
+        try:
             self._learn_emotes_from_message(tags, message)
         except Exception:
             pass
@@ -714,7 +789,25 @@ class TwitchIRC:
                     execute_delete(self.sock, CHANNEL, msg_id)
             elif action == "warn":
                 self.send_message(f"@{username} ⚠️ {reason}")
-            return
+                return
+
+        try:
+            if username and username.lower() == "pokemoncommunitygame":
+                ml = msg.strip().lower()
+                if ("a wild" in ml) and ("catch it using !pokecatch" in ml):
+                    self._send_raw(f"PRIVMSG {CHANNEL} :!pokecatch ultraball")
+                    return
+                if ("don’t own that ball" in ml) or ("don't own that ball" in ml):
+                    self._send_raw(f"PRIVMSG {CHANNEL} :!pokeshop ultraball 1")
+                    def _recatch():
+                        try:
+                            self._send_raw(f"PRIVMSG {CHANNEL} :!pokecatch ultraball")
+                        except Exception:
+                            pass
+                    threading.Timer(10.0, _recatch).start()
+                    return
+        except Exception:
+            pass
 
         try:
             if _is_ignored(username):
@@ -758,6 +851,23 @@ class TwitchIRC:
                 except Exception:
                     pass
                 return
+
+        try:
+            ml = msg.strip().lower()
+            kwords = ["medlar", "medlartv", BOT_NICK.lower()]
+            asks = ["do you have", "any", "what", "show", "list"]
+            if ("command" in ml) and any(a in ml for a in asks) and any(k in ml for k in kwords):
+                link = _get_commands_link()
+                text = f"Yeah i have commands, here is the link {link} — if you use !commands i will send link as well"
+                final = _prepare_msg(_role_prefix(username) + text)
+                self.send_message(final)
+                try:
+                    log_interaction(username, msg, text)
+                except Exception:
+                    pass
+                return
+        except Exception:
+            pass
 
         # ------------------------------------------
         # Fuzzy-triggered Medlar response (IMPORTANT)

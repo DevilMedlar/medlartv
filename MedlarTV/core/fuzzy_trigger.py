@@ -6,9 +6,11 @@ Now reads trigger words from personality.yaml!
 
 import re
 import yaml
+import os
 from pathlib import Path
 from difflib import SequenceMatcher
-print("[DEBUG fuzzy_trigger] Loaded fuzzy_trigger.py")
+if os.getenv("MEDLARTV_DEBUG", "false").lower() == "true":
+    print("[DEBUG fuzzy_trigger] Loaded fuzzy_trigger.py")
 
 def load_trigger_keywords():
     """Load trigger keywords from personality.yaml"""
@@ -26,7 +28,8 @@ def load_trigger_keywords():
         triggers = personality.get("trigger_keywords", [])
         
         # Return triggers if found, otherwise use defaults
-        print(f"[DEBUG fuzzy_trigger] Trigger keywords loaded: {triggers}")
+        if os.getenv("MEDLARTV_DEBUG", "false").lower() == "true":
+            print(f"[DEBUG fuzzy_trigger] Trigger keywords loaded: {triggers}")
         return triggers if triggers else ["medlartv", "medlar"]
 
     except Exception as e:

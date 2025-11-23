@@ -1,6 +1,7 @@
-print("[DEBUG memory] Loaded memory.py")
-
 import os
+DEBUG = os.getenv("MEDLARTV_DEBUG", "false").lower() == "true"
+if DEBUG:
+    print("[DEBUG memory] Loaded memory.py")
 import json
 from datetime import datetime
 from pathlib import Path
@@ -14,20 +15,25 @@ MEMORY_FILE = Path("memory.json")
 # --------------------------------------------------------------
 
 def load_memory() -> Dict[str, Any]:
-    print(f"[DEBUG memory] load_memory() called. FILE={MEMORY_FILE}")
+    if DEBUG:
+        print(f"[DEBUG memory] load_memory() called. FILE={MEMORY_FILE}")
 
     if not MEMORY_FILE.exists():
-        print("[DEBUG memory] memory.json does NOT exist. Returning empty memory.")
+        if DEBUG:
+            print("[DEBUG memory] memory.json does NOT exist. Returning empty memory.")
         return {"moods": [], "last_reset": datetime.utcnow().isoformat()}
 
     try:
-        print("[DEBUG memory] Opening memory.json for read...")
+        if DEBUG:
+            print("[DEBUG memory] Opening memory.json for read...")
         with MEMORY_FILE.open("r", encoding="utf-8") as f:
             data = json.load(f)
-        print(f"[DEBUG memory] load_memory() loaded data: {data}")
+        if DEBUG:
+            print(f"[DEBUG memory] load_memory() loaded data: {data}")
         return data
     except Exception as e:
-        print(f"[DEBUG memory] ERROR while reading memory.json: {e}")
+        if DEBUG:
+            print(f"[DEBUG memory] ERROR while reading memory.json: {e}")
         return {"moods": [], "last_reset": datetime.utcnow().isoformat()}
 
 
@@ -36,15 +42,19 @@ def load_memory() -> Dict[str, Any]:
 # --------------------------------------------------------------
 
 def save_memory(data: Dict[str, Any]) -> None:
-    print(f"[DEBUG memory] save_memory() called with data={data}")
+    if DEBUG:
+        print(f"[DEBUG memory] save_memory() called with data={data}")
 
     try:
-        print("[DEBUG memory] Opening memory.json for WRITE...")
+        if DEBUG:
+            print("[DEBUG memory] Opening memory.json for WRITE...")
         with MEMORY_FILE.open("w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
-        print("[DEBUG memory] save_memory() write completed.")
+        if DEBUG:
+            print("[DEBUG memory] save_memory() write completed.")
     except Exception as e:
-        print(f"[DEBUG memory] ERROR saving memory.json: {e}")
+        if DEBUG:
+            print(f"[DEBUG memory] ERROR saving memory.json: {e}")
 
 
 # --------------------------------------------------------------
@@ -52,24 +62,29 @@ def save_memory(data: Dict[str, Any]) -> None:
 # --------------------------------------------------------------
 
 def record_mood(mood: str, source: str) -> None:
-    print(f"[DEBUG memory] record_mood() called mood={mood!r} source={source!r}")
+    if DEBUG:
+        print(f"[DEBUG memory] record_mood() called mood={mood!r} source={source!r}")
 
     data = load_memory()
-    print(f"[DEBUG memory] record_mood() memory BEFORE append: {data}")
+    if DEBUG:
+        print(f"[DEBUG memory] record_mood() memory BEFORE append: {data}")
 
     entry = {
         "mood": mood,
         "source": source,
         "timestamp": datetime.utcnow().isoformat()
     }
-    print(f"[DEBUG memory] record_mood() new entry={entry}")
+    if DEBUG:
+        print(f"[DEBUG memory] record_mood() new entry={entry}")
 
     try:
         data.setdefault("moods", []).append(entry)
-        print(f"[DEBUG memory] record_mood() memory AFTER append: {data}")
+        if DEBUG:
+            print(f"[DEBUG memory] record_mood() memory AFTER append: {data}")
         save_memory(data)
     except Exception as e:
-        print(f"[DEBUG memory] ERROR updating mood memory: {e}")
+        if DEBUG:
+            print(f"[DEBUG memory] ERROR updating mood memory: {e}")
 
 
 # --------------------------------------------------------------
@@ -77,15 +92,18 @@ def record_mood(mood: str, source: str) -> None:
 # --------------------------------------------------------------
 
 def get_dominant_mood() -> Optional[str]:
-    print("[DEBUG memory] get_dominant_mood() called")
+    if DEBUG:
+        print("[DEBUG memory] get_dominant_mood() called")
 
     data = load_memory()
     moods = data.get("moods", [])
 
-    print(f"[DEBUG memory] get_dominant_mood() moods list: {moods}")
+    if DEBUG:
+        print(f"[DEBUG memory] get_dominant_mood() moods list: {moods}")
 
     if not moods:
-        print("[DEBUG memory] dominant_mood → None (no moods)")
+        if DEBUG:
+            print("[DEBUG memory] dominant_mood → None (no moods)")
         return None
 
     counts: Dict[str, int] = {}
@@ -93,10 +111,12 @@ def get_dominant_mood() -> Optional[str]:
         m = entry.get("mood")
         counts[m] = counts.get(m, 0) + 1
 
-    print(f"[DEBUG memory] get_dominant_mood() counts={counts}")
+    if DEBUG:
+        print(f"[DEBUG memory] get_dominant_mood() counts={counts}")
 
     dominant = max(counts, key=counts.get)
-    print(f"[DEBUG memory] get_dominant_mood() dominant={dominant}")
+    if DEBUG:
+        print(f"[DEBUG memory] get_dominant_mood() dominant={dominant}")
 
     return dominant
 
@@ -106,15 +126,18 @@ def get_dominant_mood() -> Optional[str]:
 # --------------------------------------------------------------
 
 def get_dominant_weighted_mood() -> Optional[str]:
-    print("[DEBUG memory] get_dominant_weighted_mood() called")
+    if DEBUG:
+        print("[DEBUG memory] get_dominant_weighted_mood() called")
 
     data = load_memory()
     moods = data.get("moods", [])
 
-    print(f"[DEBUG memory] get_dominant_weighted_mood() mood entries={len(moods)}")
+    if DEBUG:
+        print(f"[DEBUG memory] get_dominant_weighted_mood() mood entries={len(moods)}")
 
     if not moods:
-        print("[DEBUG memory] weighted_mood → None (no moods)")
+        if DEBUG:
+            print("[DEBUG memory] weighted_mood → None (no moods)")
         return None
 
     weights: Dict[str, float] = {}
@@ -129,17 +152,21 @@ def get_dominant_weighted_mood() -> Optional[str]:
             age_seconds = max(1, (now - dt).total_seconds())
             weight = 1 / age_seconds
         except Exception as e:
-            print(f"[DEBUG memory] ERROR parsing timestamp {ts}: {e}")
+            if DEBUG:
+                print(f"[DEBUG memory] ERROR parsing timestamp {ts}: {e}")
             weight = 0.000001
 
-        print(f"[DEBUG memory] Mood={mood} ts={ts} weight={weight}")
+        if DEBUG:
+            print(f"[DEBUG memory] Mood={mood} ts={ts} weight={weight}")
 
         weights[mood] = weights.get(mood, 0) + weight
 
-    print(f"[DEBUG memory] get_dominant_weighted_mood() weights={weights}")
+    if DEBUG:
+        print(f"[DEBUG memory] get_dominant_weighted_mood() weights={weights}")
 
     dominant = max(weights, key=weights.get)
-    print(f"[DEBUG memory] get_dominant_weighted_mood() dominant={dominant}")
+    if DEBUG:
+        print(f"[DEBUG memory] get_dominant_weighted_mood() dominant={dominant}")
 
     return dominant
 
@@ -149,17 +176,21 @@ def get_dominant_weighted_mood() -> Optional[str]:
 # --------------------------------------------------------------
 
 def reset_memory_on_shutdown() -> None:
-    print("[DEBUG memory] reset_memory_on_shutdown() called")
+    if DEBUG:
+        print("[DEBUG memory] reset_memory_on_shutdown() called")
 
     data = {
         "moods": [],
         "last_reset": datetime.utcnow().isoformat()
     }
 
-    print(f"[DEBUG memory] reset_memory_on_shutdown() new memory={data}")
+    if DEBUG:
+        print(f"[DEBUG memory] reset_memory_on_shutdown() new memory={data}")
 
     try:
         save_memory(data)
-        print("[DEBUG memory] reset_memory_on_shutdown() save complete")
+        if DEBUG:
+            print("[DEBUG memory] reset_memory_on_shutdown() save complete")
     except Exception as e:
-        print(f"[DEBUG memory] ERROR in reset_memory_on_shutdown(): {e}")
+        if DEBUG:
+            print(f"[DEBUG memory] ERROR in reset_memory_on_shutdown(): {e}")

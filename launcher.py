@@ -12,6 +12,7 @@ import subprocess
 import socket
 import signal
 from pathlib import Path
+DEBUG = os.getenv("MEDLARTV_DEBUG", "false").lower() == "true"
 
 # ──────────────────────────────────────────────────────────────
 # Colors for pretty output
@@ -55,10 +56,10 @@ def start_process(name, command, wait=2, cwd=None, use_venv=False):
             env["PYTHONPATH"] = str(ROOT)
         env["PYTHONIOENCODING"] = "utf-8"
 
-        # DEBUG LINES (correctly indented)
-        print(f"[DEBUG] Launching process '{name}' with command: {command}")
-        print(f"[DEBUG] Working directory: {cwd or ROOT}")
-        print(f"[DEBUG] Using venv: {use_venv}")
+        if DEBUG:
+            print(f"[DEBUG] Launching process '{name}' with command: {command}")
+            print(f"[DEBUG] Working directory: {cwd or ROOT}")
+            print(f"[DEBUG] Using venv: {use_venv}")
 
         log_file_name = name.lower().replace(" ", "_").replace("(", "").replace(")", "") + ".log"
         log_path = LOGS_DIR / log_file_name
@@ -74,7 +75,8 @@ def start_process(name, command, wait=2, cwd=None, use_venv=False):
             creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if platform.system() == "Windows" else 0
         )
 
-        print(f"[DEBUG] Process object created. PID pending...")
+        if DEBUG:
+            print(f"[DEBUG] Process object created. PID pending...")
 
         time.sleep(wait)
         if proc.poll() is None:
@@ -158,12 +160,20 @@ def main():
     os.environ["BRIDGE_HOST"] = bridge_host
     os.environ["BRIDGE_PORT"] = str(bridge_port)
     os.environ["BRIDGE_URL"] = f"ws://127.0.0.1:{bridge_port}"
-    print(f"[DEBUG] Avatar Bridge selected port: {bridge_port}")
+    if DEBUG:
+        print(f"[DEBUG] Avatar Bridge selected port: {bridge_port}")
     start_process("Avatar Bridge Server", f'"{VENV_PYTHON}" MedlarTV/avatar/bridge/server.py', use_venv=True, wait=2)
 
     # ───────────────────────────────────────────────
-    # 3️⃣ Medlar Core (inside venv)
-    start_process("Medlar Core (FastAPI)", f'"{VENV_PYTHON}" MedlarTV/core/main.py', use_venv=True, wait=4)
+    # 3️⃣ Medlar Core (direct)
+    start_process(
+        "Medlar Core",
+        f'"{VENV_PYTHON}" MedlarTV/core/main.py',
+        use_venv=True,
+        wait=4
+    )
+
+    pass
 
     # ───────────────────────────────────────────────
     # Avatar Console Client (inside venv, optional)
@@ -179,12 +189,13 @@ def main():
         while True:
             time.sleep(1)
             heartbeat += 1
-            if heartbeat % 10 == 0:
+            if heartbeat % 10 == 0 and DEBUG:
                 print("[DEBUG] Launcher heartbeat: processes running okay...")
             for p in processes:
                 if p["proc"].poll() is not None:
                     print(f"{Colors.RED}[ALERT] Process crashed: {p['proc'].args}{Colors.NC}")
-                    print(f"[DEBUG] Return code: {p['proc'].returncode}")
+                    if DEBUG:
+                        print(f"[DEBUG] Return code: {p['proc'].returncode}")
                     print(f"{Colors.RED}[ALERT] {p['proc'].args} exited unexpectedly!{Colors.NC}")
                     stop_all()
                     sys.exit(1)

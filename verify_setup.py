@@ -171,6 +171,7 @@ def check_config_files() -> bool:
         "MedlarTV/config/personality.yaml",
         "MedlarTV/config/policy.yaml",
         "MedlarTV/config/style_profiles.yaml",
+        "MedlarTV/config/timers.yaml",
     ]
 
     missing = [f for f in required if not Path(f).exists()]

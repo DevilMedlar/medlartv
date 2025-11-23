@@ -14,7 +14,7 @@ log.debug("[DEBUG] emotion_emote_selector loaded")
 EMOTION_EMOTE_MAP = {
     # Core Emotions
     "happiness": {
-        "twitch": ["PogChamp", "VoHiYo", "CoolCat", "devilmeGODMODE"],
+        "twitch": ["PogChamp", "VoHiYo", "CoolCat"],
         "unicode": ["😊", "😀", "😁", "💖", "✨"]
     },
     "sadness": {
@@ -32,11 +32,11 @@ EMOTION_EMOTE_MAP = {
     
     # Social Emotions
     "excitement": {
-        "twitch": ["PogChamp", "Kreygasm", "devilmeGODMODE", "PogChamp"],
+        "twitch": ["PogChamp", "Kreygasm", "PogChamp"],
         "unicode": ["🔥", "⚡", "🚀", "💥", "✨"]
     },
     "gratitude": {
-        "twitch": ["VoHiYo", "CoolCat", "devilmeGODMODE"],
+        "twitch": ["VoHiYo", "CoolCat"],
         "unicode": ["💖", "💕", "🙏", "✨", "💝"]
     },
     "jealousy": {
@@ -44,27 +44,43 @@ EMOTION_EMOTE_MAP = {
         "unicode": ["😒", "🙄", "😤"]
     },
     "pride": {
-        "twitch": ["PogChamp", "CoolCat", "devilmeGODMODE"],
+        "twitch": ["PogChamp", "CoolCat"],
         "unicode": ["🏆", "👑", "💪", "⭐", "🌟"]
     },
     
     # Mood States
     "chill": {
-        "twitch": ["CoolCat", "Kappa", "devilmeGODMODE"],
+        "twitch": ["CoolCat", "Kappa"],
         "unicode": ["😌", "🌙", "💫", "🫶", "✌️"]
     },
     "supportive": {
-        "twitch": ["VoHiYo", "CoolCat", "devilmeGODMODE"],
+        "twitch": ["VoHiYo", "CoolCat"],
         "unicode": ["💖", "🌟", "✨", "💪", "🤗"]
     },
     "snarky": {
         "twitch": ["Kappa", "4Head", "LUL"],
         "unicode": ["😏", "🙃", "😉", "😈", "🤨"]
     },
+    "affection": {
+        "twitch": ["VoHiYo", "CoolCat"],
+        "unicode": ["❤️", "💖", "💕", "💓", "💞"]
+    },
+    "romance": {
+        "twitch": ["VoHiYo", "CoolCat"],
+        "unicode": ["💘", "💝", "💌", "💞", "💗"]
+    },
+    "attraction": {
+        "twitch": ["PogChamp", "Kreygasm"],
+        "unicode": ["😍", "🥰", "✨", "💫", "⭐"]
+    },
+    "arousal": {
+        "twitch": ["PogChamp", "Kreygasm"],
+        "unicode": ["🔥", "⚡", "💥", "🚀", "✨"]
+    },
     
     # Energy States
     "energetic": {
-        "twitch": ["PogChamp", "Kreygasm", "devilmeGODMODE"],
+        "twitch": ["PogChamp", "Kreygasm"],
         "unicode": ["⚡", "🔥", "💪", "🚀", "✨"]
     },
     "tired": {
@@ -82,14 +98,14 @@ EMOTION_EMOTE_MAP = {
         "unicode": ["😔", "💔", "😢", "🥺"]
     },
     "connected": {
-        "twitch": ["VoHiYo", "CoolCat", "devilmeGODMODE"],
+        "twitch": ["VoHiYo", "CoolCat"],
         "unicode": ["🤝", "💖", "✨", "🌟", "💕"]
     }
 }
 
 # Fallback emotes for unknown emotions
 DEFAULT_EMOTES = {
-    "twitch": ["devilmeGODMODE", "PogChamp", "Kappa", "CoolCat"],
+    "twitch": ["PogChamp", "Kappa", "CoolCat"],
     "unicode": ["💬", "✨", "🎮", "🎯"]
 }
 
@@ -129,7 +145,7 @@ def get_emotion_emote(emotion: str, emote_type: str = "twitch", available_emotes
         return chosen
     
     # Absolute fallback
-    return "devilmeGODMODE" if emote_type == "twitch" else "💬"
+    return "PogChamp" if emote_type == "twitch" else "💬"
 
 
 def add_emotion_emote(message: str, emotion: str, available_emotes: Optional[List[str]] = None, 
@@ -240,7 +256,7 @@ def integrate_with_emotional_system():
     # token = os.getenv("TWITCH_TOKEN")
     # broadcaster_id = "your_broadcaster_id"
     # available_emotes = load_global_emotes(token) + load_channel_emotes(token, broadcaster_id)
-    available_emotes = ["PogChamp", "Kappa", "LUL", "devilmeGODMODE", "CoolCat"]
+    available_emotes = ["PogChamp", "Kappa", "LUL", "CoolCat"]
     
     # Generate response
     message = "Thanks for being here!"
@@ -269,7 +285,7 @@ if __name__ == "__main__":
         ("snarky", {"snarky": 0.6, "anger": 0.3}),
     ]
     
-    available = ["PogChamp", "Kappa", "LUL", "devilmeGODMODE", "CoolCat", "BibleThump"]
+    available = ["PogChamp", "Kappa", "LUL", "CoolCat", "BibleThump"]
     
     for emotion, state in test_emotions:
         print(f"\n--- {emotion.upper()} ---")

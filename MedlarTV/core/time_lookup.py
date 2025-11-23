@@ -6,6 +6,37 @@ Uses WorldTimeAPI (free, no key required)
 import requests
 from datetime import datetime
 import re
+import os
+
+DEBUG = os.getenv("MEDLARTV_DEBUG", "false").lower() == "true"
+
+# Shared aliases for common city/country names → canonical timezones
+TIMEZONE_ALIASES: dict[str, str] = {
+    # Countries / cities
+    "philippines": "Asia/Manila",
+    "manila": "Asia/Manila",
+    "japan": "Asia/Tokyo",
+    "tokyo": "Asia/Tokyo",
+    "uk": "Europe/London",
+    "united kingdom": "Europe/London",
+    "england": "Europe/London",
+    "london": "Europe/London",
+    "usa": "America/New_York",
+    "us": "America/New_York",
+    "new york": "America/New_York",
+    "nyc": "America/New_York",
+    "california": "America/Los_Angeles",
+    "los angeles": "America/Los_Angeles",
+    "la": "America/Los_Angeles",
+    "china": "Asia/Shanghai",
+    "shanghai": "Asia/Shanghai",
+    "canada": "America/Toronto",
+    "toronto": "America/Toronto",
+    "russia": "Europe/Moscow",
+    "moscow": "Europe/Moscow",
+    "delhi": "Asia/Kolkata",
+    "india": "Asia/Kolkata",
+}
 
 def get_current_time(location: str) -> str:
     """
@@ -17,70 +48,70 @@ def get_current_time(location: str) -> str:
     Returns:
         Formatted time string or error message
     """
-    print(f"[DEBUG time_lookup] get_current_time() called with location={location!r}")
+    if DEBUG:
+        print(f"[DEBUG time_lookup] get_current_time() called with location={location!r}")
 
-    # Map common locations to timezones
-    timezone_map = {
-        "philippines": "Asia/Manila",
-        "manila": "Asia/Manila",
-        "japan": "Asia/Tokyo",
-        "tokyo": "Asia/Tokyo",
-        "uk": "Europe/London",
-        "london": "Europe/London",
-        "usa": "America/New_York",
-        "new york": "America/New_York",
-        "california": "America/Los_Angeles",
-        "los angeles": "America/Los_Angeles",
-        "china": "Asia/Shanghai",
-        "canada": "America/Toronto",
-        "russia": "Europe/Moscow",
-    }
+    # Use shared aliases
 
-    print("[DEBUG time_lookup] Normalizing location...")
+    if DEBUG:
+        print("[DEBUG time_lookup] Normalizing location...")
     location_lower = location.lower().strip()
-    print(f"[DEBUG time_lookup] location_lower={location_lower!r}")
+    if DEBUG:
+        print(f"[DEBUG time_lookup] location_lower={location_lower!r}")
 
-    print("[DEBUG time_lookup] Resolving timezone...")
-    timezone = timezone_map.get(location_lower)
-    print(f"[DEBUG time_lookup] Using timezone={timezone!r}")
+    if DEBUG:
+        print("[DEBUG time_lookup] Resolving timezone...")
+    timezone = TIMEZONE_ALIASES.get(location_lower)
+    if DEBUG:
+        print(f"[DEBUG time_lookup] Using timezone={timezone!r}")
 
     try:
         if not timezone:
-            print("[DEBUG time_lookup] No direct timezone mapping, returning None")
+            if DEBUG:
+                print("[DEBUG time_lookup] No direct timezone mapping, returning None")
             return None
         url = f"http://worldtimeapi.org/api/timezone/{timezone}"
-        print(f"[DEBUG time_lookup] Requesting URL: {url}")
+        if DEBUG:
+            print(f"[DEBUG time_lookup] Requesting URL: {url}")
         response = requests.get(url, timeout=3)
-        print(f"[DEBUG time_lookup] response.status_code={response.status_code}")
+        if DEBUG:
+            print(f"[DEBUG time_lookup] response.status_code={response.status_code}")
 
         if response.status_code == 200:
-            print("[DEBUG time_lookup] 200 OK, parsing JSON...")
+            if DEBUG:
+                print("[DEBUG time_lookup] 200 OK, parsing JSON...")
             data = response.json()
             datetime_str = data.get("datetime")
-            print(f"[DEBUG time_lookup] datetime_raw={datetime_str!r}")
+            if DEBUG:
+                print(f"[DEBUG time_lookup] datetime_raw={datetime_str!r}")
 
             if datetime_str:
-                print("[DEBUG time_lookup] Converting ISO datetime...")
+                if DEBUG:
+                    print("[DEBUG time_lookup] Converting ISO datetime...")
                 dt = datetime.fromisoformat(datetime_str.replace('Z', '+00:00'))
                 formatted_time = dt.strftime("%I:%M %p")
                 formatted_date = dt.strftime("%B %d, %Y")
 
-                print(f"[DEBUG time_lookup] formatted_time={formatted_time!r}")
-                print(f"[DEBUG time_lookup] formatted_date={formatted_date!r}")
+                if DEBUG:
+                    print(f"[DEBUG time_lookup] formatted_time={formatted_time!r}")
+                    print(f"[DEBUG time_lookup] formatted_date={formatted_date!r}")
 
                 return f"Current time in {location}: {formatted_time} on {formatted_date}"
 
         # If specific timezone fails, try generic search
-        print("[DEBUG time_lookup] Non-200 or missing datetime, checking fallback logic...")
+        if DEBUG:
+            print("[DEBUG time_lookup] Non-200 or missing datetime, checking fallback logic...")
         if "Asia/" in timezone:
-            print(f"[DEBUG time_lookup] Returning fallback timezone message for {location!r}")
+            if DEBUG:
+                print(f"[DEBUG time_lookup] Returning fallback timezone message for {location!r}")
             return f"Unable to get exact time for {location}. Timezone: {timezone}"
-
-        print("[DEBUG time_lookup] Returning None (lookup failed)")
+        if DEBUG:
+            print("[DEBUG time_lookup] Returning None (lookup failed)")
         return None
 
     except Exception as e:
-        print(f"[DEBUG time_lookup] ERROR inside get_current_time(): {e}")
+        if DEBUG:
+            print(f"[DEBUG time_lookup] ERROR inside get_current_time(): {e}")
         return None
 
 
@@ -91,9 +122,11 @@ def should_lookup_time(message: str) -> tuple[bool, str]:
     Returns:
         (should_lookup, location)
     """
-    print(f"[DEBUG time_lookup] should_lookup_time() called message={message!r}")
+    if DEBUG:
+        print(f"[DEBUG time_lookup] should_lookup_time() called message={message!r}")
     message_lower = message.lower()
-    print(f"[DEBUG time_lookup] message_lower={message_lower!r}")
+    if DEBUG:
+        print(f"[DEBUG time_lookup] message_lower={message_lower!r}")
 
     # Time indicators
     time_indicators = [
@@ -104,29 +137,36 @@ def should_lookup_time(message: str) -> tuple[bool, str]:
         "whats the time"
     ]
 
-    print("[DEBUG time_lookup] Checking time indicators...")
+    if DEBUG:
+        print("[DEBUG time_lookup] Checking time indicators...")
     indicator_match = any(indicator in message_lower for indicator in time_indicators)
-    print(f"[DEBUG time_lookup] indicator_match={indicator_match}")
+    if DEBUG:
+        print(f"[DEBUG time_lookup] indicator_match={indicator_match}")
 
     if not indicator_match:
-        print("[DEBUG time_lookup] No time indicators found, returning (False, None)")
+        if DEBUG:
+            print("[DEBUG time_lookup] No time indicators found, returning (False, None)")
         return False, None
 
-    print("[DEBUG time_lookup] Extracting location via pattern 'in <...>'...")
+    if DEBUG:
+        print("[DEBUG time_lookup] Extracting location via pattern 'in <...>'...")
     m = re.search(r"\bin\s+([a-zA-Z/_\-\s]+)", message_lower)
     if m:
         loc = m.group(1).strip().strip("?.! ")
         if loc.startswith("the "):
             loc = loc[4:]
-        print(f"[DEBUG time_lookup] Extracted location={loc!r}")
+        if DEBUG:
+            print(f"[DEBUG time_lookup] Extracted location={loc!r}")
         return True, loc
-    print("[DEBUG time_lookup] No location phrase found, returning (True, None) for local default")
+    if DEBUG:
+        print("[DEBUG time_lookup] No location phrase found, returning (True, None) for local default")
     return True, None
 
 
 # Integration with LLM brain
 def resolve_timezones_for_query(query: str) -> list[str]:
-    print(f"[DEBUG time_lookup] resolve_timezones_for_query() query={query!r}")
+    if DEBUG:
+        print(f"[DEBUG time_lookup] resolve_timezones_for_query() query={query!r}")
     q = (query or "").strip().lower()
     if not q:
         return []
@@ -142,6 +182,9 @@ def resolve_timezones_for_query(query: str) -> list[str]:
         "edt": "america/new_york",
     }
     q = synonyms.get(q, q)
+    # Direct alias fallback if listing fails
+    if q in TIMEZONE_ALIASES:
+        return [TIMEZONE_ALIASES[q]]
     zones = list_timezones(None)
     if not zones:
         return []
@@ -164,11 +207,26 @@ def resolve_timezones_for_query(query: str) -> list[str]:
         if z not in seen:
             uniq.append(z)
             seen.add(z)
-    print(f"[DEBUG time_lookup] resolve_timezones_for_query() matched {len(uniq)} zones")
+    if DEBUG:
+        print(f"[DEBUG time_lookup] resolve_timezones_for_query() matched {len(uniq)} zones")
     return uniq
 
 def get_times_for_location(location: str):
     loc = location.lower().strip()
+    # Single-zone alias fast path
+    if loc in TIMEZONE_ALIASES:
+        tz = TIMEZONE_ALIASES[loc]
+        try:
+            r = requests.get(f"http://worldtimeapi.org/api/timezone/{tz}", timeout=3)
+            if r.status_code == 200:
+                data = r.json()
+                ds = data.get("datetime")
+                if ds:
+                    dt = datetime.fromisoformat(ds.replace('Z', '+00:00'))
+                    label = tz.split("/")[-1].replace("_", " ")
+                    return f"{label}: {dt.strftime('%I:%M %p')}"
+        except Exception:
+            pass
     multi = {
         "usa": [
             ("America/New_York", "Eastern"),
@@ -323,25 +381,31 @@ def enhance_time_query(user_message: str) -> str:
     If message asks for time, get real time data.
     Returns context string to add to prompt, or empty string.
     """
-    print(f"[DEBUG time_lookup] enhance_time_query() called with user_message={user_message!r}")
+    if DEBUG:
+        print(f"[DEBUG time_lookup] enhance_time_query() called with user_message={user_message!r}")
     should_lookup, location = should_lookup_time(user_message)
-    print(f"[DEBUG time_lookup] should_lookup={should_lookup}, location={location!r}")
+    if DEBUG:
+        print(f"[DEBUG time_lookup] should_lookup={should_lookup}, location={location!r}")
 
     if should_lookup and location:
-        print("[DEBUG time_lookup] Triggering real-time lookup...")
+        if DEBUG:
+            print("[DEBUG time_lookup] Triggering real-time lookup...")
         time_info = get_times_for_location(location)
-        print(f"[DEBUG time_lookup] time_info={time_info!r}")
+        if DEBUG:
+            print(f"[DEBUG time_lookup] time_info={time_info!r}")
 
         if time_info:
-            print("[DEBUG time_lookup] Returning enriched context block")
+            if DEBUG:
+                print("[DEBUG time_lookup] Returning enriched context block")
             return f"\n\n[REAL-TIME DATA]\n{time_info}\n[END REAL-TIME DATA]\n\n"
-
-    print("[DEBUG time_lookup] No lookup triggered, returning empty string")
+    if DEBUG:
+        print("[DEBUG time_lookup] No lookup triggered, returning empty string")
     return ""
 
 
 if __name__ == "__main__":
-    print("[DEBUG time_lookup] __main__ test block running...")
+    if DEBUG:
+        print("[DEBUG time_lookup] __main__ test block running...")
     print("Testing time lookup...")
     print(get_current_time("Philippines"))
     print(get_current_time("Tokyo"))

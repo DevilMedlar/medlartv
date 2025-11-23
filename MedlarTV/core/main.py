@@ -1,4 +1,6 @@
-print("[DEBUG main] Loaded main.py")
+import os
+if os.getenv("MEDLARTV_DEBUG", "false").lower() == "true":
+    print("[DEBUG main] Loaded main.py")
 
 """
 MedlarTV Main Entry Point (Refactored)
@@ -28,6 +30,9 @@ from MedlarTV.tools.twitch_listener import start_listener, stop_listener
 from MedlarTV.core.emotional_system import get_emotional_system
 from MedlarTV.core.memory import load_memory
 from MedlarTV.core.stream_management import verify_twitch_tokens
+from MedlarTV.core.llm_brain import generate_response
+from MedlarTV.core.mood_system import compute_mood, get_mood_label
+from MedlarTV.core.content_filter import filter_message, get_safety_response
 
 log = logging.getLogger("main")
 logging.basicConfig(
@@ -179,6 +184,18 @@ def page_commands() -> HTMLResponse:
     return HTMLResponse(content=html, status_code=200)
 
 
+# api_chat removed
+
+
+## filter endpoints removed
+
+
+## personality endpoints removed
+
+
+## startup/shutdown hooks removed
+
+
 def configure_logging():
     log_dir = os.getenv("LOG_DIRECTORY", "logs")
     base = Path.cwd() / log_dir
@@ -218,44 +235,55 @@ def configure_logging():
 
 def initialize_systems():
     log.info("[SYSTEM] Initializing MedlarTV core…")
-    print("[DEBUG main] initialize_systems() called")
+    if os.getenv("MEDLARTV_DEBUG", "false").lower() == "true":
+        print("[DEBUG main] initialize_systems() called")
 
     try:
-        print("[DEBUG main] initializing emotional system…")
+        if os.getenv("MEDLARTV_DEBUG", "false").lower() == "true":
+            print("[DEBUG main] initializing emotional system…")
         from MedlarTV.core.emotional_system import get_emotional_system
         get_emotional_system()
-        print("[DEBUG main] emotional system initialized successfully")
+        if os.getenv("MEDLARTV_DEBUG", "false").lower() == "true":
+            print("[DEBUG main] emotional system initialized successfully")
         log.info("[OK] Emotional system initialized")
     except Exception as e:
         log.error(f"[FAIL] Emotional system failed: {e}")
 
     try:
-        print("[DEBUG main] loading memory…")
+        if os.getenv("MEDLARTV_DEBUG", "false").lower() == "true":
+            print("[DEBUG main] loading memory…")
         load_memory()
-        print("[DEBUG main] memory loaded successfully")
+        if os.getenv("MEDLARTV_DEBUG", "false").lower() == "true":
+            print("[DEBUG main] memory loaded successfully")
         log.info("[OK] Memory loaded")
     except Exception as e:
         log.error(f"[FAIL] Memory load failed: {e}")
 
     try:
-        print("[DEBUG main] verifying twitch tokens…")
+        if os.getenv("MEDLARTV_DEBUG", "false").lower() == "true":
+            print("[DEBUG main] verifying twitch tokens…")
         verified = verify_twitch_tokens()
         if verified:
-            print("[DEBUG main] twitch tokens verified")
+            if os.getenv("MEDLARTV_DEBUG", "false").lower() == "true":
+                print("[DEBUG main] twitch tokens verified")
             log.info("[OK] Twitch tokens verified")
         else:
-            print("[DEBUG main] twitch tokens verification failed")
+            if os.getenv("MEDLARTV_DEBUG", "false").lower() == "true":
+                print("[DEBUG main] twitch tokens verification failed")
             log.error("[FAIL] Twitch token verification failed")
     except Exception as e:
         log.error(f"[FAIL] Twitch token verification failed: {e}")
 
 def shutdown(*_):
-    print("[DEBUG main] shutdown() triggered")
+    if os.getenv("MEDLARTV_DEBUG", "false").lower() == "true":
+        print("[DEBUG main] shutdown() triggered")
     log.info("\n[SYSTEM] Shutting down MedlarTV…")
     try:
-        print("[DEBUG main] stopping twitch listener…")
+        if os.getenv("MEDLARTV_DEBUG", "false").lower() == "true":
+            print("[DEBUG main] stopping twitch listener…")
         stop_listener()
-        print("[DEBUG main] twitch listener stopped")
+        if os.getenv("MEDLARTV_DEBUG", "false").lower() == "true":
+            print("[DEBUG main] twitch listener stopped")
     except Exception as e:
         log.error(f"[Shutdown] Listener stop failed: {e}")
 
@@ -263,18 +291,23 @@ def shutdown(*_):
     sys.exit(0)
 
 def main():
-    print("[DEBUG main] main() started")
-    print(BOOT_BANNER)
-    print("[DEBUG main] boot banner printed")
+    if os.getenv("MEDLARTV_DEBUG", "false").lower() == "true":
+        print("[DEBUG main] main() started")
+        print(BOOT_BANNER)
+        print("[DEBUG main] boot banner printed")
     configure_logging()
 
-    print("[DEBUG main] calling initialize_systems()")
+    if os.getenv("MEDLARTV_DEBUG", "false").lower() == "true":
+        print("[DEBUG main] calling initialize_systems()")
     initialize_systems()
-    print("[DEBUG main] initialize_systems() completed")
+    if os.getenv("MEDLARTV_DEBUG", "false").lower() == "true":
+        print("[DEBUG main] initialize_systems() completed")
 
-    print("[DEBUG main] calling start_listener()")
+    if os.getenv("MEDLARTV_DEBUG", "false").lower() == "true":
+        print("[DEBUG main] calling start_listener()")
     start_listener()
-    print("[DEBUG main] start_listener() returned")
+    if os.getenv("MEDLARTV_DEBUG", "false").lower() == "true":
+        print("[DEBUG main] start_listener() returned")
 
     log.info("[SYSTEM] MedlarTV is now operational.")
     log.info("Press Ctrl+C to shut down.")

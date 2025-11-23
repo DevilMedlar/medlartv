@@ -18,7 +18,7 @@ energetic:
   baseline: 0.30
 tired:
   baseline: 0.20
-stress:
+stressed:
   baseline: 0.15
 lonely:
   baseline: 0.10
@@ -28,5 +28,13 @@ pride:
   baseline: 0.20
 jealousy:
   baseline: 0.05
-last_update: 1763007167.8196023
-timestamp: '2025-11-12T23:12:47.820209'
+affection:
+  baseline: 0.30
+romance:
+  baseline: 0.20
+attraction:
+  baseline: 0.20
+arousal:
+  baseline: 0.05
+last_update: 1763710888.0
+timestamp: '2025-11-21T00:01:28Z'

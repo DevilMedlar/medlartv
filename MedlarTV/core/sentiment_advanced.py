@@ -1,4 +1,7 @@
-print("[DEBUG sentiment_advanced] Loaded sentiment_advanced.py")
+import os
+DEBUG = os.getenv("MEDLARTV_DEBUG", "false").lower() == "true"
+if DEBUG:
+    print("[DEBUG sentiment_advanced] Loaded sentiment_advanced.py")
 
 """
 MedlarTV Enhanced Sentiment Analysis
@@ -41,6 +44,10 @@ EMOTION_WORDS = {
     "gratitude": ["thanks", "thank you", "grateful", "appreciate", "thankful"],
     "jealousy": ["jealous", "envy", "envious", "wish i had"],
     "pride": ["proud", "accomplished", "achievement", "nailed it", "crushed it"],
+    "affection": ["love", "loving", "adore", "affection", "heart", "caring", "sweetheart"],
+    "romance": ["romance", "romantic", "date", "valentine", "kiss"],
+    "attraction": ["attractive", "hot", "cute", "handsome", "pretty", "sexy"],
+    "arousal": ["arousal", "aroused", "horny", "turned on"],
 }
 
 # Emoji sentiment mapping
@@ -55,13 +62,16 @@ EMOJI_SENTIMENT = {
 
 
 def analyze_sentiment_advanced(message: str) -> Tuple[float, Dict[str, float]]:
-    print(f"[DEBUG sentiment_advanced] analyze_sentiment_advanced() called message={message!r}")
+    if DEBUG:
+        print(f"[DEBUG sentiment_advanced] analyze_sentiment_advanced() called message={message!r}")
 
     text = message.lower()
-    print(f"[DEBUG sentiment_advanced] normalized_text={text!r}")
+    if DEBUG:
+        print(f"[DEBUG sentiment_advanced] normalized_text={text!r}")
 
     words = re.findall(r'\b\w+\b', text)
-    print(f"[DEBUG sentiment_advanced] tokenized_words={words}")
+    if DEBUG:
+        print(f"[DEBUG sentiment_advanced] tokenized_words={words}")
 
     score = 0.0
     word_count = 0
@@ -69,27 +79,32 @@ def analyze_sentiment_advanced(message: str) -> Tuple[float, Dict[str, float]]:
     negated = False
 
     for i, word in enumerate(words):
-        print(f"[DEBUG sentiment_advanced] scanning_word index={i} word={word!r}")
+        if DEBUG:
+            print(f"[DEBUG sentiment_advanced] scanning_word index={i} word={word!r}")
 
         if i > 0 and words[i - 1] in NEGATIONS:
             negated = True
-            print(f"[DEBUG sentiment_advanced] word_is_negated=True (previous_word={words[i-1]!r})")
+            if DEBUG:
+                print(f"[DEBUG sentiment_advanced] word_is_negated=True (previous_word={words[i-1]!r})")
         else:
             negated = False
 
         if word in POSITIVE_WORDS:
-            print(f"[DEBUG sentiment_advanced] POSITIVE match negated={negated}")
+            if DEBUG:
+                print(f"[DEBUG sentiment_advanced] POSITIVE match negated={negated}")
             word_count += 1
             score += -1 if negated else 1
 
         elif word in NEGATIVE_WORDS:
-            print(f"[DEBUG sentiment_advanced] NEGATIVE match negated={negated}")
+            if DEBUG:
+                print(f"[DEBUG sentiment_advanced] NEGATIVE match negated={negated}")
             word_count += 1
             score += 1 if negated else -1
 
         elif word in INTENSIFIERS and i < len(words) - 1:
             next_word = words[i + 1]
-            print(f"[DEBUG sentiment_advanced] INTENSIFIER match next_word={next_word!r}")
+            if DEBUG:
+                print(f"[DEBUG sentiment_advanced] INTENSIFIER match next_word={next_word!r}")
             if next_word in POSITIVE_WORDS:
                 score += 0.5
             elif next_word in NEGATIVE_WORDS:
@@ -100,12 +115,14 @@ def analyze_sentiment_advanced(message: str) -> Tuple[float, Dict[str, float]]:
 
     for emoji, value in EMOJI_SENTIMENT.items():
         if emoji in message:
-            print(f"[DEBUG sentiment_advanced] emoji_detected emoji={emoji!r} value={value}")
+            if DEBUG:
+                print(f"[DEBUG sentiment_advanced] emoji_detected emoji={emoji!r} value={value}")
             emoji_score += value
             emoji_count += 1
 
-    print(f"[DEBUG sentiment_advanced] score_words={score} count_words={word_count}")
-    print(f"[DEBUG sentiment_advanced] emoji_score={emoji_score} emoji_count={emoji_count}")
+    if DEBUG:
+        print(f"[DEBUG sentiment_advanced] score_words={score} count_words={word_count}")
+        print(f"[DEBUG sentiment_advanced] emoji_score={emoji_score} emoji_count={emoji_count}")
 
     total_count = word_count + emoji_count
     if total_count > 0:
@@ -115,14 +132,16 @@ def analyze_sentiment_advanced(message: str) -> Tuple[float, Dict[str, float]]:
 
     overall_sentiment = max(-1.0, min(1.0, combined_score))
 
-    print(f"[DEBUG sentiment_advanced] overall_sentiment={overall_sentiment}")
+    if DEBUG:
+        print(f"[DEBUG sentiment_advanced] overall_sentiment={overall_sentiment}")
 
     emotion_scores = {}
 
     for emotion, emotion_keywords in EMOTION_WORDS.items():
         matches = sum(1 for keyword in emotion_keywords if keyword in text)
         if matches > 0:
-            print(f"[DEBUG sentiment_advanced] emotion_detected={emotion} matches={matches}")
+            if DEBUG:
+                print(f"[DEBUG sentiment_advanced] emotion_detected={emotion} matches={matches}")
             strength = min(matches * 0.15, 0.5)
 
             if emotion in ["happiness", "excitement", "gratitude", "pride"]:
@@ -136,22 +155,27 @@ def analyze_sentiment_advanced(message: str) -> Tuple[float, Dict[str, float]]:
             strength = min(strength, 1.0)
             emotion_scores[emotion] = strength
 
-            print(f"[DEBUG sentiment_advanced] emotion_strength[{emotion}]={strength}")
+            if DEBUG:
+                print(f"[DEBUG sentiment_advanced] emotion_strength[{emotion}]={strength}")
 
-    print(f"[DEBUG sentiment_advanced] final_emotion_scores={emotion_scores}")
+    if DEBUG:
+        print(f"[DEBUG sentiment_advanced] final_emotion_scores={emotion_scores}")
 
     return overall_sentiment, emotion_scores
 
 
 def analyze_sentiment_simple(message: str) -> float:
-    print(f"[DEBUG sentiment_advanced] analyze_sentiment_simple() called")
+    if DEBUG:
+        print(f"[DEBUG sentiment_advanced] analyze_sentiment_simple() called")
     sentiment, _ = analyze_sentiment_advanced(message)
-    print(f"[DEBUG sentiment_advanced] simple_sentiment={sentiment}")
+    if DEBUG:
+        print(f"[DEBUG sentiment_advanced] simple_sentiment={sentiment}")
     return sentiment
 
 
 def detect_emotional_keywords(message: str) -> Dict[str, int]:
-    print(f"[DEBUG sentiment_advanced] detect_emotional_keywords() message={message!r}")
+    if DEBUG:
+        print(f"[DEBUG sentiment_advanced] detect_emotional_keywords() message={message!r}")
 
     text = message.lower()
     detected = {}
@@ -160,13 +184,15 @@ def detect_emotional_keywords(message: str) -> Dict[str, int]:
         matches = sum(1 for keyword in keywords if keyword in text)
         if matches > 0:
             detected[emotion] = matches
-            print(f"[DEBUG sentiment_advanced] keyword_detected emotion={emotion} matches={matches}")
+            if DEBUG:
+                print(f"[DEBUG sentiment_advanced] keyword_detected emotion={emotion} matches={matches}")
 
     return detected
 
 
 def get_sentiment_description(sentiment: float) -> str:
-    print(f"[DEBUG sentiment_advanced] get_sentiment_description() sentiment={sentiment}")
+    if DEBUG:
+        print(f"[DEBUG sentiment_advanced] get_sentiment_description() sentiment={sentiment}")
 
     if sentiment >= 0.7:
         return "very positive"

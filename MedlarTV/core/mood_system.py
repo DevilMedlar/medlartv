@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-print("[DEBUG mood_system] Loaded mood_system.py")
+import os
+DEBUG = os.getenv("MEDLARTV_DEBUG", "false").lower() == "true"
+if DEBUG:
+    print("[DEBUG mood_system] Loaded mood_system.py")
 
 import logging
 from typing import Dict, Any
@@ -38,7 +41,8 @@ def compute_mood(emotions: Dict[str, float]) -> Dict[str, Any]:
 
     The caller (MedlarTV brain) turns this into a label + style.
     """
-    print(f"[DEBUG mood_system] compute_mood() called with emotions={emotions}")
+    if DEBUG:
+        print(f"[DEBUG mood_system] compute_mood() called with emotions={emotions}")
 
     # Pull all known emotions with safe defaults
     g = lambda k: float(emotions.get(k, 0.0))
@@ -73,6 +77,7 @@ def compute_mood(emotions: Dict[str, float]) -> Dict[str, Any]:
     tired = g("tired")
     drained = g("drained")
     bored = g("bored")
+    arousal = g("arousal")
 
     # Warmth / support cluster
     supportive = g("supportive")
@@ -133,6 +138,7 @@ def compute_mood(emotions: Dict[str, float]) -> Dict[str, Any]:
         stress,
         chaotic,
         mischief,
+        arousal,
     ])
 
     low_energy = _avg([
@@ -156,6 +162,8 @@ def compute_mood(emotions: Dict[str, float]) -> Dict[str, Any]:
         connected,
         gratitude,
         calm,
+        g("romance"),
+        g("attraction"),
     ])
 
     warmth_negative = _avg([
@@ -197,7 +205,8 @@ def compute_mood(emotions: Dict[str, float]) -> Dict[str, Any]:
         f"valence={valence:.2f}, energy={energy:.2f}, "
         f"warmth={warmth:.2f}, snark={snark:.2f}"
     )
-    print(f"[DEBUG mood_system] compute_mood() mood_vector before labeling: {mood_vector}")
+    if DEBUG:
+        print(f"[DEBUG mood_system] compute_mood() mood_vector before labeling: {mood_vector}")
 
     # Also derive a coarse label for convenience
     label = get_mood_label(mood_vector, emotions)
@@ -209,7 +218,8 @@ def compute_mood(emotions: Dict[str, float]) -> Dict[str, Any]:
         f"valence={valence:.2f}, energy={energy:.2f}, "
         f"warmth={warmth:.2f}, snark={snark:.2f}"
     )
-    print(f"[DEBUG mood_system] compute_mood() returning mood_vector: {mood_vector_with_label}")
+    if DEBUG:
+        print(f"[DEBUG mood_system] compute_mood() returning mood_vector: {mood_vector_with_label}")
 
     return mood_vector_with_label
 
@@ -224,7 +234,8 @@ def get_mood_label(mood: Dict[str, float], emotions: Dict[str, float]) -> str:
     w = float(mood.get("warmth", 0.0))
     s = float(mood.get("snark", 0.0))
 
-    print(f"[DEBUG mood_system] get_mood_label() called with valence={v:.2f}, energy={e:.2f}, warmth={w:.2f}, snark={s:.2f}")
+    if DEBUG:
+        print(f"[DEBUG mood_system] get_mood_label() called with valence={v:.2f}, energy={e:.2f}, warmth={w:.2f}, snark={s:.2f}")
 
     # For some special cases, look directly at raw emotions
     g = lambda k: float(emotions.get(k, 0.0))  # type: ignore[name-defined]
@@ -238,7 +249,8 @@ def get_mood_label(mood: Dict[str, float], emotions: Dict[str, float]) -> str:
 
     if grief > 0.6 or (sadness > 0.6 and loneliness > 0.4):
         # Very heavy stuff → grief label
-        print('[DEBUG mood_system] get_mood_label(): returning "Grief / Overwhelmed"')
+        if DEBUG:
+            print('[DEBUG mood_system] get_mood_label(): returning "Grief / Overwhelmed"')
         return "Grief / Overwhelmed"
 
     # --------------------------------
@@ -246,9 +258,11 @@ def get_mood_label(mood: Dict[str, float], emotions: Dict[str, float]) -> str:
     # --------------------------------
     if v > 0.4 and e > 0.4:
         if s > 0.5:
-            print('[DEBUG mood_system] get_mood_label(): returning "Hyper & Chaotic"')
+            if DEBUG:
+                print('[DEBUG mood_system] get_mood_label(): returning "Hyper & Chaotic"')
             return "Hyper & Chaotic"
-        print('[DEBUG mood_system] get_mood_label(): returning "Hyped & Excited"')
+        if DEBUG:
+            print('[DEBUG mood_system] get_mood_label(): returning "Hyped & Excited"')
         return "Hyped & Excited"
 
     # --------------------------------
@@ -256,9 +270,11 @@ def get_mood_label(mood: Dict[str, float], emotions: Dict[str, float]) -> str:
     # --------------------------------
     if v > 0.3 and e < 0.1:
         if w > 0.6:
-            print('[DEBUG mood_system] get_mood_label(): returning "Cozy & Supportive"')
+            if DEBUG:
+                print('[DEBUG mood_system] get_mood_label(): returning "Cozy & Supportive"')
             return "Cozy & Supportive"
-        print('[DEBUG mood_system] get_mood_label(): returning "Chill & Content"')
+        if DEBUG:
+            print('[DEBUG mood_system] get_mood_label(): returning "Chill & Content"')
         return "Chill & Content"
 
     # --------------------------------
@@ -272,12 +288,15 @@ def get_mood_label(mood: Dict[str, float], emotions: Dict[str, float]) -> str:
     if v < -0.3 and e > 0.2:
         if anger > 0.5 or annoyance > 0.5:
             if s > 0.5:
-                print('[DEBUG mood_system] get_mood_label(): returning "Spicy / Ranty"')
+                if DEBUG:
+                    print('[DEBUG mood_system] get_mood_label(): returning "Spicy / Ranty"')
                 return "Spicy / Ranty"
-            print('[DEBUG mood_system] get_mood_label(): returning "Frustrated"')
+            if DEBUG:
+                print('[DEBUG mood_system] get_mood_label(): returning "Frustrated"')
             return "Frustrated"
         if stress > 0.5 or anxiety > 0.5:
-            print('[DEBUG mood_system] get_mood_label(): returning "Stressed / Overloaded"')
+            if DEBUG:
+                print('[DEBUG mood_system] get_mood_label(): returning "Stressed / Overloaded"')
             return "Stressed / Overloaded"
 
     # --------------------------------
@@ -285,30 +304,35 @@ def get_mood_label(mood: Dict[str, float], emotions: Dict[str, float]) -> str:
     # --------------------------------
     if v < -0.3 and e < 0.0:
         if sadness > 0.5 or loneliness > 0.5:
-            print('[DEBUG mood_system] get_mood_label(): returning "Low & Sad"')
+            if DEBUG:
+                print('[DEBUG mood_system] get_mood_label(): returning "Low & Sad"')
             return "Low & Sad"
-        print('[DEBUG mood_system] get_mood_label(): returning "Drained / Meh"')
+        if DEBUG:
+            print('[DEBUG mood_system] get_mood_label(): returning "Drained / Meh"')
         return "Drained / Meh"
 
     # --------------------------------
     # Neutral valence but spicy snark
     # --------------------------------
     if abs(v) < 0.2 and s > 0.6:
-        print('[DEBUG mood_system] get_mood_label(): returning "Snarky & Playful"')
+        if DEBUG:
+            print('[DEBUG mood_system] get_mood_label(): returning "Snarky & Playful"')
         return "Snarky & Playful"
 
     # --------------------------------
     # High warmth & moderate energy
     # --------------------------------
     if w > 0.6 and e > 0.1:
-        print('[DEBUG mood_system] get_mood_label(): returning "Encouraging & Pumped"')
+        if DEBUG:
+            print('[DEBUG mood_system] get_mood_label(): returning "Encouraging & Pumped"')
         return "Encouraging & Pumped"
 
     # --------------------------------
     # Warmth dominant, low energy
     # --------------------------------
     if w > 0.6 and e < 0.1 and v >= 0.0:
-        print('[DEBUG mood_system] get_mood_label(): returning "Calm & Supportive"')
+        if DEBUG:
+            print('[DEBUG mood_system] get_mood_label(): returning "Calm & Supportive"')
         return "Calm & Supportive"
 
     # --------------------------------
@@ -316,11 +340,14 @@ def get_mood_label(mood: Dict[str, float], emotions: Dict[str, float]) -> str:
     # --------------------------------
     if abs(v) < 0.2 and abs(e) < 0.2:
         if w > 0.5:
-            print('[DEBUG mood_system] get_mood_label(): returning "Calm & Supportive"')
+            if DEBUG:
+                print('[DEBUG mood_system] get_mood_label(): returning "Calm & Supportive"')
             return "Calm & Supportive"
-        print('[DEBUG mood_system] get_mood_label(): returning "Neutral"')
+        if DEBUG:
+            print('[DEBUG mood_system] get_mood_label(): returning "Neutral"')
         return "Neutral"
 
     # Last-resort safety net
-    print('[DEBUG mood_system] get_mood_label(): returning "Mixed"')
+    if DEBUG:
+        print('[DEBUG mood_system] get_mood_label(): returning "Mixed"')
     return "Mixed"
