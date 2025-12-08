@@ -23,6 +23,7 @@ from typing import Dict, Any
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse, HTMLResponse
 import yaml
+from MedlarTV.core.settings import get_settings, update_settings
 
 load_dotenv()
 
@@ -72,6 +73,67 @@ def api_commands() -> JSONResponse:
             "usage": str(info.get("usage", "")),
         })
     return JSONResponse({"commands": items}, headers={"Cache-Control": "no-store"})
+
+@APP.get("/api/settings")
+def api_get_settings() -> JSONResponse:
+    return JSONResponse(get_settings(), headers={"Cache-Control": "no-store"})
+
+@APP.post("/api/settings")
+def api_update_settings(payload: Dict[str, Any]) -> JSONResponse:
+    updated = update_settings(dict(payload or {}))
+    return JSONResponse(updated, headers={"Cache-Control": "no-store"})
+
+@APP.get("/settings")
+def page_settings() -> HTMLResponse:
+    html = """
+    <!DOCTYPE html>
+    <html lang=\"en\">
+    <head>
+      <meta charset=\"utf-8\" />
+      <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />
+      <title>MedlarTV Settings</title>
+      <style>
+        :root { --bg:#0f1218; --card:#1a1f2b; --text:#e6e9ef; --muted:#9aa4b2; --accent:#6ae3ff; }
+        body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; background:var(--bg); color:var(--text); }
+        .container { max-width:720px; margin:24px auto; padding:0 16px; }
+        .card { background:var(--card); border:1px solid #2b3242; border-radius:10px; padding:14px; }
+        .row { display:flex; align-items:center; justify-content:space-between; padding:8px 0; }
+        label { font-size:14px; }
+      </style>
+    </head>
+    <body>
+      <div class=\"container\">
+        <h2>Settings</h2>
+        <div class=\"card\">
+          <div class=\"row\"><label>LLM Brain</label><input id=\"llm_brain\" type=\"checkbox\" /></div>
+          <div class=\"row\"><label>Pokémon Auto-Catch</label><input id=\"pcg_auto_catch\" type=\"checkbox\" /></div>
+          <div class=\"row\"><label>Ignore Viewer Poké Commands</label><input id=\"ignore_viewer_pokecatch\" type=\"checkbox\" /></div>
+          <div class=\"row\"><label>Content Filter</label><input id=\"content_filter\" type=\"checkbox\" /></div>
+          <div class=\"row\"><label>Timers</label><input id=\"timers\" type=\"checkbox\" /></div>
+          <div class=\"row\"><label>Fuzzy Trigger</label><input id=\"fuzzy_trigger\" type=\"checkbox\" /></div>
+        </div>
+        <p style=\"margin-top:18px; font-size:12px; color:#8fa1b5\">Source: <a href=\"/api/settings\">/api/settings</a></p>
+      </div>
+      <script>
+        async function load() {
+          const r = await fetch('/api/settings', {cache:'no-store'});
+          const s = await r.json();
+          const keys = ['llm_brain','pcg_auto_catch','ignore_viewer_pokecatch','content_filter','timers','fuzzy_trigger'];
+          for (const k of keys) {
+            const el = document.getElementById(k);
+            if (el) el.checked = !!s[k];
+            if (el) el.onchange = async () => {
+              const payload = {}; payload[k] = el.checked;
+              await fetch('/api/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+            };
+          }
+        }
+        load();
+      </script>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html, status_code=200)
 
 @APP.get("/commands")
 def page_commands() -> HTMLResponse:

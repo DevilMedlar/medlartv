@@ -12,6 +12,8 @@ import subprocess
 import socket
 import signal
 from pathlib import Path
+os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+os.environ.setdefault("PYTHONUTF8", "1")
 DEBUG = os.getenv("MEDLARTV_DEBUG", "false").lower() == "true"
 
 # ──────────────────────────────────────────────────────────────
@@ -34,12 +36,69 @@ class Colors:
 Colors.init()
 # ──────────────────────────────────────────────────────────────
 
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 ROOT = Path(__file__).parent.resolve()
 VENV_PYTHON = ROOT / ".venv" / "Scripts" / "python.exe"
 LOGS_DIR = ROOT / "logs"
 LOGS_DIR.mkdir(exist_ok=True)
 
 processes = []
+
+def _load_env_file():
+    env_path = ROOT / ".env"
+    try:
+        if env_path.exists():
+            with env_path.open("r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    if "=" not in line:
+                        continue
+                    k, v = line.split("=", 1)
+                    k = k.strip()
+                    v = v.strip()
+                    if k:
+                        os.environ[k] = v
+    except Exception:
+        pass
+
+def clear_logs():
+    try:
+        for p in LOGS_DIR.glob("*"):
+            try:
+                if p.is_file():
+                    p.unlink()
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+def clear_old_sessions(keep: int = 1):
+    try:
+        sessions_dir = ROOT / "db" / "sessions"
+        sessions_dir.mkdir(parents=True, exist_ok=True)
+        files = []
+        try:
+            files = [p for p in sessions_dir.iterdir() if p.is_file()]
+        except Exception:
+            files = []
+        try:
+            files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+        except Exception:
+            pass
+        for p in files[keep:]:
+            try:
+                p.unlink()
+            except Exception:
+                pass
+    except Exception:
+        pass
 
 def banner():
     print(f"""{Colors.CYAN}
@@ -48,10 +107,14 @@ def banner():
 ╚══════════════════════════════════════════════════════════╝
 {Colors.NC}""")
 
-def start_process(name, command, wait=2, cwd=None, use_venv=False):
+def start_process(name, command, wait=2, cwd=None, use_venv=False, required=False):
     print(f"{Colors.CYAN}[START] {name}...{Colors.NC}")
     try:
         env = os.environ.copy()
+        try:
+            env["MEDLARTV_ROOT"] = str(ROOT)
+        except Exception:
+            pass
         if use_venv:
             env["PYTHONPATH"] = str(ROOT)
         env["PYTHONIOENCODING"] = "utf-8"
@@ -65,6 +128,12 @@ def start_process(name, command, wait=2, cwd=None, use_venv=False):
         log_path = LOGS_DIR / log_file_name
         log_handle = open(log_path, "a", encoding="utf-8")
 
+        flags = 0
+        if platform.system() == "Windows":
+            try:
+                flags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
+            except Exception:
+                flags = subprocess.CREATE_NEW_PROCESS_GROUP
         proc = subprocess.Popen(
             command,
             cwd=cwd or ROOT,
@@ -72,7 +141,7 @@ def start_process(name, command, wait=2, cwd=None, use_venv=False):
             shell=True,
             stdout=log_handle,
             stderr=subprocess.STDOUT,
-            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if platform.system() == "Windows" else 0
+            creationflags=flags
         )
 
         if DEBUG:
@@ -81,7 +150,7 @@ def start_process(name, command, wait=2, cwd=None, use_venv=False):
         time.sleep(wait)
         if proc.poll() is None:
             print(f"{Colors.GREEN}[OK] {name} running (PID {proc.pid}){Colors.NC}")
-            processes.append({"proc": proc, "name": name, "log": log_handle})
+            processes.append({"proc": proc, "name": name, "log": log_handle, "required": required})
         else:
             print(f"{Colors.RED}[FAIL] {name} failed to start{Colors.NC}")
             try:
@@ -114,6 +183,13 @@ def stop_all():
     print(f"{Colors.GREEN}All systems offline.{Colors.NC}")
 
 def main():
+    clear_logs()
+    _load_env_file()
+    try:
+        keep_n = int(os.getenv("MEDLARTV_SESSION_KEEP", "1"))
+    except Exception:
+        keep_n = 1
+    clear_old_sessions(keep_n)
     banner()
     print(f"{Colors.GREEN}Initializing Medlar Tactical AI systems...{Colors.NC}\n")
 
@@ -124,7 +200,7 @@ def main():
 
     # ───────────────────────────────────────────────
     # 1️⃣ Ollama (system)
-    start_process("Ollama Server", "ollama serve", wait=3)
+    start_process("Ollama Server", "ollama serve", wait=3, required=False)
 
     # ───────────────────────────────────────────────
     # 2️⃣ LibreTranslate (system)
@@ -134,7 +210,8 @@ def main():
             "LibreTranslate Server",
             "python -m libretranslate.main",
             cwd=lt_script,
-            wait=5
+            wait=5,
+            required=False
         )
     else:
         print(f"{Colors.YELLOW}[WARN] LibreTranslate path not found at {lt_script}{Colors.NC}")
@@ -162,7 +239,7 @@ def main():
     os.environ["BRIDGE_URL"] = f"ws://127.0.0.1:{bridge_port}"
     if DEBUG:
         print(f"[DEBUG] Avatar Bridge selected port: {bridge_port}")
-    start_process("Avatar Bridge Server", f'"{VENV_PYTHON}" MedlarTV/avatar/bridge/server.py', use_venv=True, wait=2)
+    start_process("Avatar Bridge Server", f'"{VENV_PYTHON}" MedlarTV/avatar/bridge/server.py', use_venv=True, wait=2, required=False)
 
     # ───────────────────────────────────────────────
     # 3️⃣ Medlar Core (direct)
@@ -170,7 +247,8 @@ def main():
         "Medlar Core",
         f'"{VENV_PYTHON}" MedlarTV/core/main.py',
         use_venv=True,
-        wait=4
+        wait=4,
+        required=True
     )
 
     pass
@@ -193,16 +271,21 @@ def main():
                 print("[DEBUG] Launcher heartbeat: processes running okay...")
             for p in processes:
                 if p["proc"].poll() is not None:
-                    print(f"{Colors.RED}[ALERT] Process crashed: {p['proc'].args}{Colors.NC}")
+                    crashed = p
+                    print(f"{Colors.YELLOW}[WARN] Process exited: {p['name']} ({p['proc'].args}){Colors.NC}")
                     if DEBUG:
                         print(f"[DEBUG] Return code: {p['proc'].returncode}")
-                    print(f"{Colors.RED}[ALERT] {p['proc'].args} exited unexpectedly!{Colors.NC}")
-                    stop_all()
-                    sys.exit(1)
+                    try:
+                        p["log"].close()
+                    except Exception:
+                        pass
+                    if p.get("required", False):
+                        print(f"{Colors.RED}[ALERT] Required process '{p['name']}' exited. Shutting down...{Colors.NC}")
+                        stop_all()
+                        sys.exit(1)
     except KeyboardInterrupt:
         stop_all()
 
 
 if __name__ == "__main__":
     main()
-

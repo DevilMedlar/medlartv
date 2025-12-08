@@ -208,12 +208,12 @@ commands:
     usage: "!t <lang> <text> | Example: !t jp Hello!"
   
   tlang:
-    response: "Supported languages: jp/ja (🇯🇵), kr/ko (🇰🇷), cn/zh (🇨🇳), sp/es (🇪🇸), fr (🇫🇷), de (🇩🇪), pt (🇵🇹), ru (🇷🇺), it (🇮🇹)"
+    response: "Supported languages are dynamic. Examples: en, es, fr, de, it, pt, zh, ja, ko, ru, ar, sv, tr, tl, th, vi, nl, pl"
     allowed_roles: ["everybody"]
     description: "Show supported translation languages"
   
   thelp:
-    response: "!t <lang> <text> | Example: !t jp Hello!  use !tlang to see supported languages"
+    response: "!t <target language> <source language>: <text> | Example: !t jp en: Hello!  use !tlang to see supported languages"
     allowed_roles: ["everybody"]
     
   # CO-PILOT MANAGEMENT

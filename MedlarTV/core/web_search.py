@@ -72,18 +72,26 @@ def search_web(query: str, max_results: int = None) -> List[Dict]:
         if DEBUG:
             print("[DEBUG enhanced_search] search_web() creating DDGS() context")
         with DDGS() as ddgs:
-            if DEBUG:
-                print("[DEBUG enhanced_search] search_web() calling ddgs.text(...)")
-            results = list(ddgs.text(query, max_results=max_results))
-            if DEBUG:
-                print(f"[DEBUG enhanced_search] search_web() ddgs.text() returned {len(results)} results")
-            print(f"[Web Search] Found {len(results)} results for: {query}")
-            return results
+            backends = ["api", "lite", "html"]
+            for be in backends:
+                try:
+                    if DEBUG:
+                        print(f"[DEBUG enhanced_search] search_web() calling ddgs.text(...) backend={be}")
+                    results = list(ddgs.text(query, max_results=max_results, backend=be))
+                    if results:
+                        if DEBUG:
+                            print(f"[DEBUG enhanced_search] search_web() ddgs.text() returned {len(results)} results (backend={be})")
+                        print(f"[Web Search] Found {len(results)} results for: {query}")
+                        return results
+                except Exception as e:
+                    if DEBUG:
+                        print(f"[DEBUG enhanced_search] search_web() backend={be} EXCEPTION: {e}")
+                    continue
     except Exception as e:
         if DEBUG:
             print(f"[DEBUG enhanced_search] search_web() EXCEPTION: {e}")
         print(f"[Web Search] Error: {e}")
-        return []
+    return []
 
 
 def search_wikipedia(query: str, sentences: int = 3) -> Optional[Dict]:

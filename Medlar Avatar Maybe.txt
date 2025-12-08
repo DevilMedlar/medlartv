@@ -1,0 +1,103 @@
+Scope
+
+- Create a lively, controllable 3D avatar for Medlar that runs entirely local, reacts to text/audio, and needs no button presses.
+- Use free tools for asset creation if desired; runtime remains service‑free and offline.
+Core Behaviors
+
+- Idle presence: breathing hover, subtle wing flaps, tail flicks, random blinks, micro head tilts.
+- Emotions: neutral , happy , curious , angry , sad , surprised , smug .
+- Speech reaction: mouth shapes (visemes), jaw bob, eye focus and brow motion synced to phonemes or amplitude.
+- Movement: fly, glide, land, orbit a target, move to coordinates, follow a path, look at a point, follow the camera.
+- Gestures: wave wing, point with wing, tail wag, wink, tiny bow, hands‑off “thinking” pose.
+- Attention cues: glow pulse, wing flare, horn twitch when events occur (mentions, alerts).
+Modes
+
+- idle : ambient loops with occasional micro‑gestures.
+- chat : prioritize lip‑sync and eye contact; gentle hover; expressive reactions.
+- present : slower, confident motions; gesture emphasis.
+- alert : sharper motions, focused gaze, tail stiffening.
+- sleep : low energy, reduced motion, soft breathing.
+Autonomy Rules
+
+- Sentiment mapping: positive → happy or curious ; negative → sad or angry ; surprised keywords → surprised .
+- Context triggers: “attention/important” → alert ; “joke/fun” → smug/happy .
+- Activity cadence: rotate minor gestures every 20–40 seconds; avoid repetition; respect mode .
+- Safety: never spam rapid motions; enforce min durations and cooldowns.
+Movement Set
+
+- move_to : position with ease‑in/out.
+- set_velocity : continuous drift; safe speed caps.
+- look_at : aim head/eyes at a target; smooth tracking.
+- orbit : radius, speed, plane; suitable for “present” mode.
+- land / takeoff : transition sequences; wings adjust posture.
+Gesture Set
+
+- wing_wave , wing_point_left/right
+- tail_flick_short/long
+- wink_left/right
+- bow_small
+- flare_wings
+- horn_twitch
+Each gesture has duration, intensity, and interrupt rules (e.g., speech can blend over gestures, but alert may preempt).
+
+Voice & Lip Sync
+
+- Input: text or audio file.
+- Offline TTS (optional): Piper/Coqui; store audio locally.
+- Lip‑sync: viseme timing via Rhubarb Lip Sync or amplitude‑based fallback.
+- Viseme map: AI , E , O , U , FV , L , MBP , WQ → shape keys; smooth interpolation; clamp extremes.
+Visual FX
+
+- Eye highlights and blinks; occasional squint for emotion emphasis.
+- Glow ring or rim‑light pulse for reactions; color shifts per mode.
+- Shadow and light positioning to keep silhouette readable.
+I/O Protocol (Local, Programmatic)
+
+- Commands accepted as local messages (e.g., JSON over WebSocket or HTTP ). No external services required.
+- Categories:
+  - emote : set emotion
+  - say : speak text or play audio with viseme timings
+  - mode : change behavior mode
+  - move_to / set_velocity / look_at / orbit / land / takeoff
+  - gesture : play named gesture
+  - fx : glow/color pulse
+  - idle : enable/disable ambient motions
+- Responses: ack , error , state snapshot, completed events.
+Animation Layering
+
+- Base: locomotion (hover/fly/land).
+- Overlay: gestures (wing/tail/wink).
+- Face: brows/eyes/mouth visemes/emotions.
+- FX: glow pulses/color shifts.
+Blend priority: face > gestures > base; ensure clean transitions and no hard pops.
+
+Performance Targets
+
+- 60 FPS on a mid‑range Windows laptop.
+- Draw calls and polycount kept modest; animations blended on GPU/CPU efficiently.
+- Entire runtime and assets loaded from local disk; zero network calls.
+Free Tooling (Optional for Asset Creation)
+
+- Blender (rig + shape keys + animations).
+- Rhubarb Lip Sync (visemes).
+- Piper/Coqui (offline TTS).
+- Mixamo clips (free) if you want extra gestures; retarget in Blender.
+- All exported as GLB/GLTF and stored locally; runtime uses local files only.
+Asset Convention
+
+- Model: medlar.glb with armature Armature , bones Wing.L , Wing.R , Tail , Head .
+- Shape keys: Viseme_AI , Viseme_E , Viseme_O , Viseme_U , Viseme_FV , Viseme_L , Viseme_MBP , Viseme_WQ , plus emotions Emote_Happy , Emote_Sad , Emote_Angry , Emote_Surprised , Emote_Smug , Emote_Curious .
+- Animations: Idle_Hover , Fly_Loop , Land , Takeoff , Wing_Wave , Tail_Flick , Wink_Left/Right .
+Security & Privacy
+
+- All assets and libraries stored locally.
+- No external accounts; no data leaves the machine.
+- Simple access control (local only) to prevent outside control.
+Milestones
+
+- Define and approve the behavior set above.
+- Build or source the rigged GLB with named bones/shape keys.
+- Create/retarget core animations and export locally.
+- Wire the local runtime with the command protocol and autonomy rules.
+- Add lip‑sync pipeline and test with offline audio.
+- Final polish: timing, blending, eye behaviors, FX, and performance.

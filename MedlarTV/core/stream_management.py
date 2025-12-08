@@ -650,6 +650,7 @@ def verify_twitch_tokens() -> bool:
 
     if ok:
         log.info("[Stream] ✅ Twitch tokens verified")
+        log.info("verify_twitch_tokens() -> True")
         if DEBUG:
             print("[DEBUG stream_management] verify_twitch_tokens() -> True")
     else:

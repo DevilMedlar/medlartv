@@ -21,7 +21,8 @@ from MedlarTV.core.twitch_events import (
 from MedlarTV.core.llm_brain import generate_response
 from MedlarTV.core.interaction_logger import log_interaction
 from MedlarTV.core.time_lookup import should_lookup_time, get_times_for_location, get_default_local_time
-from MedlarTV.core.web_search import search_intelligently
+from MedlarTV.core.web_search import search_intelligently, search_web
+from MedlarTV.core.settings import is_enabled
 
 log = logging.getLogger("twitch_listener")
 
@@ -89,6 +90,52 @@ def _role_prefix(username: str) -> str:
         return f"@{username} "
     except Exception:
         return f"@{username} "
+
+def _username_for_model(username: str) -> str:
+    try:
+        channel_name = CHANNEL.lstrip("#").lower()
+        if username.lower() == channel_name:
+            return "Pilot"
+        return username
+    except Exception:
+        return username
+
+def _sanitize_reply_text(text: str, username: str) -> str:
+    try:
+        t = str(text)
+        # normalize spacing and zero-widths
+        t = t.replace("\u00a0", " ").replace("\u200b", "").replace("\u2009", " ")
+        t = t.lstrip()
+        import re
+        # Remove leading speaker label
+        t = re.sub(r"^(?i)(medlartv|medlar)\s*:\s*", "", t)
+        # Remove leading duplicates of the addressed username
+        uname = re.escape(username)
+        patterns = [
+            # Direct leading name or @name with punctuation/space
+            rf"^(?i)\s*@?\s*{uname}\b[^A-Za-z0-9]*\s*",
+            # Greeting followed by name (allow emojis/punct between)
+            rf"^(?i)\s*(hey|hi|hello|yo|hiya|hey there|sup|what's up|whats up)\b[^A-Za-z0-9@]*@?\s*{uname}\b[^A-Za-z0-9]*\s*",
+        ]
+        for p in patterns:
+            t = re.sub(p, "", t)
+        return t.lstrip()
+    except Exception:
+        return text
+
+def _is_pilot(username: str) -> bool:
+    try:
+        return username.lower() == CHANNEL.lstrip("#").lower()
+    except Exception:
+        return False
+
+def _prefix_for_llm_reply(username: str) -> str:
+    try:
+        if _is_pilot(username):
+            return ""
+        return _role_prefix(username)
+    except Exception:
+        return _role_prefix(username)
 
 _TIMERS_FILE = Path(__file__).resolve().parents[1] / "config" / "timers.yaml"
 
@@ -356,6 +403,7 @@ class TwitchIRC:
         self.connected: bool = False
         self.stop_flag: bool = False
         self.available_emotes: List[str] = []
+        self.user_emotes: List[str] = []
         self._timers: List[Dict[str, Any]] = []
         self._chat_count: int = 0
         self._next_chat_due: Dict[str, int] = {}
@@ -406,6 +454,12 @@ class TwitchIRC:
         except Exception:
             pass
 
+        try:
+            if os.getenv("ENABLE_ONLINE_OFFLINE_MSGS", "true").lower() == "true":
+                self._send_raw(f"PRIVMSG {CHANNEL} :MedlarTV online")
+        except Exception:
+            pass
+
     # ------------------------------------------------------------------
     def _send_raw(self, text: str):
         if not self.sock:
@@ -416,27 +470,29 @@ class TwitchIRC:
         if not self.connected:
             return
         try:
-            final = self._decorate_message(msg)
+            try:
+                if is_enabled("content_filter"):
+                    from MedlarTV.core.content_filter import filter_message, get_safety_response
+                    ok, filtered, reason = filter_message(msg, None)
+                    base_msg = filtered if ok and filtered is not None else get_safety_response()
+                else:
+                    base_msg = msg
+            except Exception:
+                base_msg = msg
+            try:
+                final = self._decorate_message(base_msg)
+            except Exception:
+                final = base_msg
         except Exception:
             final = msg
         self._send_raw(f"PRIVMSG {CHANNEL} :{final}")
 
     def _init_emotes(self) -> None:
         try:
-            token = os.getenv("DEVILMEDLAR_TWITCH_TOKEN", "").replace("oauth:", "")
-            if not token:
-                return
-            from MedlarTV.core.stream_management import get_broadcaster_id
-            bid = get_broadcaster_id()
-            if not bid:
-                return
-            from MedlarTV.core.twitch_events import load_global_emotes, load_channel_emotes
-            g = load_global_emotes(token)
-            c = load_channel_emotes(token, bid)
-            emotes = sorted(set((g or []) + (c or [])))
-            self.available_emotes = emotes
+            self.available_emotes = []
+            self.user_emotes = []
             try:
-                log.info(f"[IRC] Loaded {len(self.available_emotes)} Twitch emotes for channel")
+                log.info("[IRC] Emotes will be loaded from USERSTATE emote-sets for bot account")
             except Exception:
                 pass
         except Exception:
@@ -446,7 +502,7 @@ class TwitchIRC:
         try:
             if os.getenv("ENABLE_EMOTE_RESPONSES", "true").lower() != "true":
                 return _prepare_msg(msg)
-            avail = self.available_emotes or []
+            avail = self.user_emotes or []
             try:
                 from MedlarTV.core.emotional_system import get_current_emotion
                 from MedlarTV.core.emotion_emote_selector import add_emotion_emote
@@ -545,6 +601,11 @@ class TwitchIRC:
 
     def stop(self):
         self.stop_flag = True
+        try:
+            if self.sock and os.getenv("ENABLE_ONLINE_OFFLINE_MSGS", "true").lower() == "true":
+                self._send_raw(f"PRIVMSG {CHANNEL} :MedlarTV offline")
+        except Exception:
+            pass
         self.connected = False
         if self.sock:
             self.sock.close()
@@ -561,6 +622,14 @@ class TwitchIRC:
 
         try:
             if " USERSTATE " in line and "emote-sets=" in line:
+                idx = line.find("emote-sets=")
+                if idx != -1:
+                    seg = line[idx:].split(";", 1)[0]
+                    val = seg.split("=", 1)[1]
+                    sets = [s.strip() for s in val.split(",") if s.strip()]
+                    if sets:
+                        self._fetch_emote_sets(sets)
+            if " GLOBALUSERSTATE " in line and "emote-sets=" in line:
                 idx = line.find("emote-sets=")
                 if idx != -1:
                     seg = line[idx:].split(";", 1)[0]
@@ -612,10 +681,11 @@ class TwitchIRC:
                 except Exception:
                     pass
             if names:
-                merged = sorted(set(self.available_emotes + names))
-                self.available_emotes = merged
+                # Use only the bot's accessible emotes from USERSTATE
+                self.user_emotes = sorted(set(names))
+                self.available_emotes = list(self.user_emotes)
                 try:
-                    log.info(f"[IRC] Emote sets merged, total available={len(self.available_emotes)}")
+                    log.info(f"[IRC] Bot emotes loaded from emote-sets, total available={len(self.user_emotes)}")
                 except Exception:
                     pass
         except Exception:
@@ -743,19 +813,29 @@ class TwitchIRC:
                             pieces.append(message[start:end+1])
                     except Exception:
                         continue
+            # Do not learn emotes from others unless the bot can use them
             if pieces:
-                merged = sorted(set(self.available_emotes + pieces))
-                self.available_emotes = merged
-                try:
-                    log.info(f"[IRC] Learned emotes from chat, total available={len(self.available_emotes)}")
-                except Exception:
-                    pass
+                allowed = set(self.user_emotes)
+                learned = [p for p in pieces if p in allowed]
+                if learned:
+                    merged = sorted(set(self.user_emotes + learned))
+                    self.user_emotes = merged
+                    self.available_emotes = list(self.user_emotes)
+                    try:
+                        log.info(f"[IRC] Learned permitted emotes from chat, total available={len(self.user_emotes)}")
+                    except Exception:
+                        pass
         except Exception:
             pass
 
     # ------------------- REGULAR CHAT ----------------------
     def _handle_regular_message(self, username: str, msg: str, ctx: Dict[str, Any], tags: Dict[str, Any]):
         log.debug(f"[DEBUG] Incoming chat: @{username}: {msg}")
+        try:
+            if username and username.lower() == BOT_NICK.lower():
+                return
+        except Exception:
+            pass
         try:
             self._chat_count += 1
             for t in self._timers:
@@ -772,40 +852,39 @@ class TwitchIRC:
         except Exception:
             pass
 
-        # Auto-moderation
-        result = check_message(username, msg, tags)
-        if not result["is_allowed"]:
-            action = result.get("action")
-            duration = result.get("duration", 0)
-            reason = result.get("reason", "violation")
-
-            if action == "timeout":
-                execute_timeout(self.sock, CHANNEL, username, duration, reason)
-            elif action == "ban":
-                execute_ban(self.sock, CHANNEL, username, reason)
-            elif action == "delete":
-                msg_id = result.get("msg_id")
-                if msg_id:
-                    execute_delete(self.sock, CHANNEL, msg_id)
-            elif action == "warn":
-                self.send_message(f"@{username} ⚠️ {reason}")
-                return
+        # Auto-moderation disabled for user messages; only Medlar follows rules
+        result = {"is_allowed": True}
 
         try:
             if username and username.lower() == "pokemoncommunitygame":
                 ml = msg.strip().lower()
+                bot_mention = f"@{BOT_NICK.lower()}"
+                mentions_bot = (bot_mention in ml) or ("@medlartv" in ml)
+                if not is_enabled("pcg_auto_catch"):
+                    return
+                # Ignore catch-success announcements
+                catch_phrases = [
+                    "has been caught by",
+                    "has been caught",
+                    "was caught by",
+                    "catch successful",
+                    "has been captured",
+                ]
+                if any(p in ml for p in catch_phrases):
+                    return
                 if ("a wild" in ml) and ("catch it using !pokecatch" in ml):
                     self._send_raw(f"PRIVMSG {CHANNEL} :!pokecatch ultraball")
                     return
                 if ("don’t own that ball" in ml) or ("don't own that ball" in ml):
-                    self._send_raw(f"PRIVMSG {CHANNEL} :!pokeshop ultraball 1")
-                    def _recatch():
-                        try:
-                            self._send_raw(f"PRIVMSG {CHANNEL} :!pokecatch ultraball")
-                        except Exception:
-                            pass
-                    threading.Timer(10.0, _recatch).start()
+                    if mentions_bot:
+                        self._send_raw(f"PRIVMSG {CHANNEL} :!pokeshop ultraball 1")
                     return
+                if "purchase successful" in ml:
+                    if mentions_bot:
+                        self._send_raw(f"PRIVMSG {CHANNEL} :!pokecatch ultraball")
+                    return
+                # Ignore any other PokemonCommunityGame messages
+                return
         except Exception:
             pass
 
@@ -880,6 +959,8 @@ class TwitchIRC:
         log.debug(f"[DEBUG] should_respond() returned: {decision}")
 
         if decision:
+            if not is_enabled("llm_brain"):
+                return
             log.debug(
                 f"[DEBUG] Calling generate_response(user={username}, msg={msg})"
             )
@@ -889,15 +970,56 @@ class TwitchIRC:
             except Exception:
                 search_context = ""
             enriched = msg + ("\n" + search_context if search_context else "")
-            reply = generate_response(enriched, username)
+            reply = generate_response(enriched, _username_for_model(username))
 
             log.debug(f"[DEBUG] generate_response() output: {reply}")
 
             if reply:
-                final = _prepare_msg(_role_prefix(username) + reply)
+                ml = msg.strip().lower()
+                wants_links = False
+                try:
+                    wants_links = (
+                        ("find" in ml or "search" in ml or "lookup" in ml) and (
+                            "twitch" in ml or "youtube" in ml or "twitter" in ml or "reddit" in ml or "channel" in ml
+                        )
+                    ) or ("on twitch" in ml)
+                except Exception:
+                    wants_links = False
+
+                link_suffix = ""
+                if wants_links:
+                    try:
+                        results = search_web(msg, max_results=2)
+                    except Exception:
+                        results = []
+                    parts = []
+                    if results:
+                        for r in results[:2]:
+                            t = r.get("title", "N/A")
+                            u = r.get("href", "")
+                            parts.append(f"{t} — {u}" if u else t)
+                    if not parts:
+                        try:
+                            import re
+                            target = None
+                            m = re.search(r"find\s+@?([A-Za-z0-9_]+)\s+on\s+twitch", ml)
+                            if not m:
+                                m = re.search(r"@?([A-Za-z0-9_]+)\s+(?:on\s+)?twitch", ml)
+                            if m:
+                                target = m.group(1)
+                            if target:
+                                parts.append(f"{target} — https://www.twitch.tv/{target}")
+                        except Exception:
+                            pass
+                    if parts:
+                        link_suffix = " | ".join(parts)
+
+                base_reply = _sanitize_reply_text(reply, _username_for_model(username))
+                composed = base_reply if not link_suffix else f"{base_reply} — {link_suffix}"
+                final = _prepare_msg(_prefix_for_llm_reply(username) + composed)
                 self.send_message(final)
                 try:
-                    log_interaction(username, msg, reply)
+                    log_interaction(username, msg, composed if composed else reply)
                 except Exception:
                     pass
 
@@ -960,6 +1082,9 @@ class TwitchIRC:
                 self.send_message(f"Active Co-Pilots: {listing}")
                 return
 
+        if cmd in {"pokecatch", "pokeshop"} and username.lower() != BOT_NICK.lower() and is_enabled("ignore_viewer_pokecatch"):
+            return
+
         response = execute_command(cmd, username, role, args, ctx)
 
         if response:
@@ -982,10 +1107,10 @@ class TwitchIRC:
             log.debug(
                 f"[DEBUG] Command fallback to generate_response(user={username}, msg={full})"
             )
-            reply = generate_response(full, username)
+            reply = generate_response(full, _username_for_model(username))
             log.debug(f"[DEBUG] generate_response() command output: {reply}")
             if reply:
-                final = _prepare_msg(_role_prefix(username) + reply)
+                final = _prepare_msg(_prefix_for_llm_reply(username) + _sanitize_reply_text(reply, _username_for_model(username)))
                 self.send_message(final)
                 try:
                     log_interaction(username, full, reply)

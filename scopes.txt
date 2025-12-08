@@ -1,0 +1,75 @@
+SCOPE NAME                              SCOPE DESCRIPTION
+analytics:read:extensions               View analytics data for your extensions.
+user:edit                               Manage a user object.
+user:read:email                         Read authorized user's email address.
+clips:edit                              Create and edit clips as a specific user.
+bits:read                               View bits information for your channel.
+analytics:read:games                    View analytics data for your games.
+user:edit:broadcast                     Edit your channel's broadcast configuration, including extension configuration. (This scope implies user:read:broadcast capability.)
+user:read:broadcast                     View your broadcasting configuration, including extension configurations.
+chat:read                               View live Stream Chat and Rooms messages
+chat:edit                               Send live Stream Chat and Rooms messages
+channel:moderate                        Perform moderation actions in a channel
+channel:read:subscriptions              Get a list of all subscribers to your channel and check if a user is subscribed to your channel
+whispers:read                           View your whisper messages.
+whispers:edit                           Send whisper messages.
+moderation:read                         View your channel's moderation data including Moderators, Bans, Timeouts and Automod settings
+channel:read:redemptions                View your channel points custom reward redemptions
+channel:edit:commercial                 Run commercials on a channel.
+channel:read:hype_train                 View hype train data for a given channel.
+channel:read:stream_key                 Read authorized user's stream key.
+channel:manage:extensions               Manage your channel's extension configuration, including activating extensions.
+channel:manage:broadcast                Manage your channel's broadcast configuration, including updating channel configuration and managing stream markers and stream tags.
+user:edit:follows                       Edit your follows.
+channel:manage:redemptions              Manage Channel Points custom rewards and their redemptions on a channel.
+channel:read:editors                    View a list of users with the editor role for a channel.
+channel:manage:videos                   Manage a channel's videos, including deleting videos.
+user:read:blocked_users                 View the block list of a user.
+user:manage:blocked_users               Manage the block list of a user.
+user:read:subscriptions                 Get the details of your subscription to a channel.
+user:read:follows                       View the list of channels a user follows.
+channel:manage:polls                    Manage a channel's polls.
+channel:manage:predictions              Manage of channel's Channel Points Predictions
+channel:read:polls                      View a channel's polls.
+channel:read:predictions                View a channel's Channel Points Predictions.
+moderator:manage:automod                Manage messages held for review by AutoMod in channels where you are a moderator.
+channel:manage:schedule                 Manage a channel's stream schedule.
+channel:read:goals                      View Creator Goals for a channel.
+moderator:read:automod_settings         Read AutoMod settings in channels where you have the moderator role
+moderator:manage:automod_settings       Manage AutoMod settings in channels where you have the moderator role
+moderator:manage:banned_users           Ban or unban users in channels where you have the moderator role
+moderator:read:blocked_terms            Read non-private blocked terms in channels where you have the moderator role
+moderator:manage:blocked_terms          Manage non-private blocked terms in channels where you have the moderator role
+moderator:read:chat_settings            Read chat settings in channels where you have the moderator role
+moderator:manage:chat_settings          Manage chat settings in channels where you have the moderator role
+channel:manage:raids                    Manage raids on your channel
+moderator:manage:announcements          Send announcements in channels where you have the moderator role.
+moderator:manage:chat_messages          Delete chat messages in channels where you have the moderator role
+user:manage:chat_color                  Update the color used for the user's name in chat.
+channel:manage:moderators               Add or remove the moderator role from users in your channel.
+channel:read:vips                       Read the list of VIPs in your channel.
+channel:manage:vips                     Add or remove the VIP role from users in your channel.
+user:manage:whispers                    Read whispers that you send and receive, and send whispers on your behalf.
+channel:read:charity                    Read charity campaign details and user donations on your channel.
+moderator:read:chatters                 Read the list of chatters in channels where you have the moderator role
+moderator:read:shield_mode              Get information about Shield Mode and Shield Mode settings in channels where you have the moderator role
+moderator:manage:shield_mode            Manage Shield Mode and Shield Mode settings in channels where you have the moderator role
+moderator:read:shoutouts                View a broadcaster's shoutouts.
+moderator:manage:shoutouts              Manage a broadcaster's shoutouts.
+moderator:read:followers                Read the list of followers in channels where you are a moderator.
+channel:read:guest_star                 Read Guest Star details for your channel.
+channel:manage:guest_star               Manage Guest Star for your channel.
+moderator:read:guest_star               Read Guest Star details for channels where you are a Guest Star moderator.
+moderator:manage:guest_star             Manage Guest Star for channels where you are a Guest Star moderator.
+channel:bot                             Allows the client's bot users access to a channel.
+user:bot                                Allows client's bot to act as this user.
+user:read:chat                          View live stream chat and room messages.
+channel:manage:ads                      Manage ads schedule on a channel.
+channel:read:ads                        Read the ads schedule and details on your channel.
+user:read:moderated_channels            Read the list of channels you have moderator privileges in.
+user:write:chat                         Send live stream chat messages using Send Chat Message API.
+user:read:emotes                        View emotes available to a user.
+moderator:read:unban_requests           View a broadcaster’s unban requests.
+moderator:manage:unban_requests         Manage a broadcaster’s unban requests.
+moderator:read:suspicious_users         Read chat messages from suspicious users and see users flagged as suspicious in channels where you have the moderator role.
+moderator:manage:warnings               Warn users in channels where you have the moderator role.

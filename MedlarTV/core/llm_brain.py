@@ -18,7 +18,10 @@ from MedlarTV.core.mood_system import (
     compute_mood,
     get_mood_label,         # corrected
 )
-from MedlarTV.core.sentiment_advanced import analyze_sentiment_advanced
+from MedlarTV.core.sentiment_advanced import analyze_sentiment_advanced, detect_emotional_keywords
+from MedlarTV.core.emotion_emote_selector import get_multiple_emotion_emotes
+import random
+import re
 
 log = logging.getLogger("llm_brain")
 
@@ -36,7 +39,7 @@ OLLAMA_MODEL = os.getenv("MODEL_NAME", os.getenv("OLLAMA_MODEL", "llama3"))
 EXPRESSION_LEVEL = 10
 
 # Max number of messages to keep in rolling chat history
-MAX_HISTORY = 12
+MAX_HISTORY = 10
 
 # Conversation history: list of {"role": "user"/"assistant"/"system", "content": "..."}
 _conversation_history: List[Dict[str, str]] = []
@@ -401,17 +404,23 @@ def generate_response(message: str, username: str) -> Optional[str]:
 
     if DEBUG:
         print("[DEBUG llm_brain] building ollama messages...")
-    messages = _build_ollama_messages(
-        system_prompt=system_prompt,
-        user_message=message,
-        username=username,
-        emotional_context=emotional_context,
-        mood_context=mood_context,
-    )
-
-    if DEBUG:
-        print("[DEBUG llm_brain] calling ollama with messages...")
-    reply = _call_ollama_chat(messages)
+    use_remote = check_ollama_health()
+    messages = []
+    if use_remote:
+        messages = _build_ollama_messages(
+            system_prompt=system_prompt,
+            user_message=message,
+            username=username,
+            emotional_context=emotional_context,
+            mood_context=mood_context,
+        )
+        if DEBUG:
+            print("[DEBUG llm_brain] calling ollama with messages...")
+        reply = _call_ollama_chat(messages)
+    else:
+        if DEBUG:
+            print("[DEBUG llm_brain] ollama health check failed, skipping remote call")
+        reply = ""
 
     if DEBUG:
         print(f"[DEBUG llm_brain] ollama_reply length={len(reply) if reply else 0}")
@@ -424,5 +433,130 @@ def generate_response(message: str, username: str) -> Optional[str]:
         return reply.strip()
 
     if DEBUG:
-        print("[DEBUG llm_brain] generate_response() no reply, returning None")
-    return None
+        print("[DEBUG llm_brain] generate_response() no remote reply, composing locally")
+
+    local = _compose_local_reply(
+        message=message,
+        username=username,
+        sentiment_score=sentiment_score,
+        emotion_scores=emotion_scores,
+        mood_context=mood_context,
+        severity=severity,
+    ).strip()
+
+    if local:
+        _append_history("user", f"{username}: {message}")
+        _append_history("assistant", local)
+        log.info(f"[MedlarTV Brain] {username}: {message}")
+        if DEBUG:
+            print(f"[DEBUG llm_brain] generate_response() returning local reply length={len(local)}")
+        return local
+
+    if DEBUG:
+        print("[DEBUG llm_brain] generate_response() local composition failed, returning fallback echo")
+    echo = f"{username}, noted: {message[:200]}"
+    _append_history("user", f"{username}: {message}")
+    _append_history("assistant", echo)
+    log.info(f"[MedlarTV Brain] {username}: {message}")
+    return echo
+
+def _compose_local_reply(
+    message: str,
+    username: str,
+    sentiment_score: float,
+    emotion_scores: Dict[str, float],
+    mood_context: Dict[str, Any],
+    severity: int,
+) -> str:
+    try:
+        text = (message or "").strip()
+        name = username.strip() or "friend"
+        snark = float(mood_context.get("snark", 0.0))
+        warmth = float(mood_context.get("warmth", 0.0))
+        energy = float(mood_context.get("energy", 0.0))
+        valence = float(mood_context.get("valence", 0.0))
+        label = str(mood_context.get("label", "Neutral"))
+
+        kws = detect_emotional_keywords(text)
+        top_em = sorted(emotion_scores.items(), key=lambda x: x[1], reverse=True)
+        dom = top_em[0][0] if top_em else "chill"
+
+        emojis = get_multiple_emotion_emotes({dom: emotion_scores.get(dom, 0.5)}, count=1, emote_type="unicode")
+        emoji = (emojis[0] if emojis else "")
+
+        sent = "neutral"
+        if sentiment_score > 0.2:
+            sent = "positive"
+        elif sentiment_score < -0.2:
+            sent = "negative"
+
+        openers_pos = [
+            f"{name}, love that.",
+            f"{name}, I feel that energy.",
+            f"{name}, vibing with you." 
+        ]
+        openers_neg = [
+            f"{name}, that’s heavy.",
+            f"{name}, I hear you.",
+            f"{name}, that’s a lot." 
+        ]
+        openers_neu = [
+            f"{name}, got you.",
+            f"{name}, noted.",
+            f"{name}, I’m with you." 
+        ]
+
+        affirmations = [
+            "You matter here.",
+            "I’m right here with you.",
+            "We’ve got your back.",
+            "One step at a time." 
+        ]
+
+        playful = [
+            "big vibes.",
+            "that’s a mood.",
+            "chef’s kiss." 
+        ]
+
+        tease = [
+            "say less.",
+            "spicy take.",
+            "I see the chaos." 
+        ]
+
+        key_hint = ""
+        if kws:
+            k = sorted(kws.items(), key=lambda x: x[1], reverse=True)[0][0]
+            key_hint = f"{k} in the mix."
+
+        opener_pool = openers_neu
+        if sent == "positive":
+            opener_pool = openers_pos
+        elif sent == "negative" or severity >= 3:
+            opener_pool = openers_neg
+
+        opener = random.choice(opener_pool)
+
+        tail = ""
+        if sent == "negative" or severity >= 3:
+            tail = random.choice(affirmations)
+        else:
+            if snark > 0.45 and valence >= 0:
+                tail = random.choice(tease)
+            else:
+                tail = random.choice(playful)
+
+        parts = [opener]
+        if key_hint:
+            parts.append(key_hint)
+        parts.append(f"Mood: {label.lower()}.")
+        if emoji:
+            parts.append(emoji)
+        parts.append(tail)
+
+        out = " ".join([p for p in parts if p]).strip()
+        out = re.sub(r"\s+", " ", out)
+        return out[:280]
+    except Exception:
+        return ""

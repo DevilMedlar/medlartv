@@ -103,6 +103,13 @@ EMOTION_EMOTE_MAP = {
     }
 }
 
+# Allowed Twitch emotes (explicit whitelist to avoid 7TV/BTTV/FFZ)
+ALLOWED_TWITCH_EMOTES: List[str] = [
+    "PogChamp", "Kappa", "LUL", "NotLikeThis", "BibleThump",
+    "VoHiYo", "CoolCat", "DansGame", "ResidentSleeper", "4Head",
+    "Kreygasm", "KappaPride", "Keepo"
+]
+
 # Fallback emotes for unknown emotions
 DEFAULT_EMOTES = {
     "twitch": ["PogChamp", "Kappa", "CoolCat"],
@@ -130,13 +137,15 @@ def get_emotion_emote(emotion: str, emote_type: str = "twitch", available_emotes
     else:
         emote_pool = DEFAULT_EMOTES.get(emote_type, [])
     
-    # If available_emotes provided, filter to only available ones
+    # If available_emotes provided, filter strictly to allowed Twitch emotes
     if available_emotes and emote_type == "twitch":
-        emote_pool = [e for e in emote_pool if e in available_emotes]
-        
-        # If no emotes available from pool, use any available custom emote
-        if not emote_pool and available_emotes:
-            emote_pool = available_emotes
+        allowed_set = set(ALLOWED_TWITCH_EMOTES)
+        available_allowed = [e for e in available_emotes if e in allowed_set]
+        emote_pool = [e for e in emote_pool if e in available_allowed]
+
+        # If none from the emotion map are available, fall back to allowed emotes only
+        if not emote_pool and available_allowed:
+            emote_pool = available_allowed
 
     # Return random emote from pool
     if emote_pool:

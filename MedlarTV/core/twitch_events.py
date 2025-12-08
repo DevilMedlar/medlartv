@@ -27,6 +27,13 @@ TWITCH_API_BASE = "https://api.twitch.tv/helix"
 _global_emotes = None
 _channel_emotes = None
 
+# Explicit whitelist of Twitch emotes to avoid third-party sets (7TV/BTTV/FFZ)
+ALLOWED_TWITCH_EMOTES: List[str] = [
+    "PogChamp", "Kappa", "LUL", "NotLikeThis", "BibleThump",
+    "VoHiYo", "CoolCat", "DansGame", "ResidentSleeper", "4Head",
+    "Kreygasm", "KappaPride", "Keepo"
+]
+
 
 def detect_raid(irc_message: str) -> Optional[Dict]:
     """
@@ -498,12 +505,15 @@ def add_random_emote(message: str, emotes: List[str]) -> str:
         "VoHiYo", "CoolCat", "DansGame", "ResidentSleeper", "4Head"
     ]
     
-    # Use good emotes if available, otherwise random
-    available_emotes = [e for e in good_emotes if e in emotes]
+    # Filter input emote pool to allowed Twitch emotes only
+    allowed_pool = [e for e in emotes if e in ALLOWED_TWITCH_EMOTES]
+
+    # Use good emotes if available, otherwise sample from allowed pool
+    available_emotes = [e for e in good_emotes if e in allowed_pool]
     if not available_emotes:
         if DEBUG:
-            print("[DEBUG twitch_events] add_random_emote() → no preferred emotes found, sampling from all")
-        available_emotes = random.sample(emotes, min(10, len(emotes)))
+            print("[DEBUG twitch_events] add_random_emote() → no preferred emotes found, sampling from allowed pool")
+        available_emotes = random.sample(allowed_pool or ["PogChamp"], 1 if not allowed_pool else min(10, len(allowed_pool)))
     else:
         if DEBUG:
             print(f"[DEBUG twitch_events] add_random_emote() → using preferred emotes={available_emotes}")
